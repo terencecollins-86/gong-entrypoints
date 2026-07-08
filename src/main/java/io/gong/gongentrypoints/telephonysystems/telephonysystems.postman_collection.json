@@ -1,0 +1,410 @@
+{
+	"info": {
+		"name": "gong-entrypoints — telephonysystems",
+		"description": "Triggers for the telephonysystems module entry points, exposed by the gong-entrypoints app. Requests are grouped into a folder per entrypoint. Set the active Postman Environment (telephonysystems.localhost or telephonysystems.dev) to point {{baseUrl}} at the running gong-entrypoints app.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "backfill",
+			"description": "Entrypoint #1 — backfill marked TSs (zero-arg smoke test). Proves the whole request → Supervisor → troubleshooter loop works. Always 200.",
+			"item": [
+				{
+					"name": "backfill — once",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/backfill",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"backfill"
+							]
+						},
+						"description": "Zero-arg smoke test. Fires the backfill-marked-TSs troubleshooter on IngesterTelephonySystemsSupervisor. Expect 200 with body 'Backfilled <n> TSs'."
+					},
+					"response": []
+				},
+				{
+					"name": "backfill — N times (loop=10)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/backfill?loop=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"backfill"
+							],
+							"query": [
+								{
+									"key": "loop",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Fires the backfill N times (5s apart). Set loop to the desired count."
+					},
+					"response": []
+				},
+				{
+					"name": "backfill — loop until stopped (loop=true)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/backfill?loop=true",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"backfill"
+							],
+							"query": [
+								{
+									"key": "loop",
+									"value": "true"
+								}
+							]
+						},
+						"description": "Loops until stopped. This request blocks until the stop request is sent."
+					},
+					"response": []
+				},
+				{
+					"name": "backfill — stop loop",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/backfill/stop",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"backfill",
+								"stop"
+							]
+						},
+						"description": "Stops an in-progress loop=true run."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "process-call-event",
+			"description": "Entrypoint #2 — process one telephony call event (Flow B, push). Forwards a TelephonyCallEvent JSON to the process-one-event troubleshooter. The requests below cover every distinct path through EventPushSupportingDialerService.processCallEvent (paths A–H, see the entrypoint README.md). Paths A–D work with the checked-in dev/seed-dialers-local.sql (company 9001); paths G and H additionally need processcallevent/seed-appuser-local.sql loaded into honeyfy_dev (the local OPERATIONAL datasource; creates appusers 700501/700601).",
+			"item": [
+				{
+					"name": "A — STARTED → 200 skipped (happy path, no seed)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyId\": 9001,\n  \"providerIdentifier\": \"smoke-test-call-1\",\n  \"providerIdentifierType\": \"ENGAGE_DIALER\",\n  \"providerName\": \"gong-connect\",\n  \"callStatus\": { \"type\": \"STARTED\" },\n  \"direction\": \"OUTBOUND\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/process-call-event?integration-flavor=GONG_CONNECT_API",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"process-call-event"
+							],
+							"query": [
+								{
+									"key": "integration-flavor",
+									"value": "GONG_CONNECT_API"
+								}
+							]
+						},
+						"description": "Path A. callStatus.type=STARTED is not processable (only COMPLETED/FAILED are), so the event is cleanly skipped before any DB/user lookup. Expect 200, body 'Done'. Recommended smoke test — needs no seeded data."
+					},
+					"response": []
+				},
+				{
+					"name": "B — ERROR: missing callStatus (500)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyId\": 9001,\n  \"providerIdentifier\": \"smoke-test-call-1\",\n  \"providerIdentifierType\": \"ENGAGE_DIALER\",\n  \"providerName\": \"gong-connect\",\n  \"direction\": \"OUTBOUND\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/process-call-event?integration-flavor=GONG_CONNECT_API",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"process-call-event"
+							],
+							"query": [
+								{
+									"key": "integration-flavor",
+									"value": "GONG_CONNECT_API"
+								}
+							]
+						},
+						"description": "Path B (negative case). callStatus is omitted → isEventOfIrrelevantStatus() NPEs on callStatus().getType(), the outer catch returns unexpectedfailure() (sendToErrorTopic=true), and PushedCallsMetricsReporter rethrows → HTTP 500. This is why callStatus must always be non-null."
+					},
+					"response": []
+				},
+				{
+					"name": "C — COMPLETED, empty ownerIdentifier → 200 failed (no seed)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyId\": 9001,\n  \"providerIdentifier\": \"smoke-test-call-1\",\n  \"providerIdentifierType\": \"ENGAGE_DIALER\",\n  \"providerName\": \"gong-connect\",\n  \"callStatus\": { \"type\": \"COMPLETED\" },\n  \"ownerIdentifier\": [],\n  \"direction\": \"OUTBOUND\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/process-call-event?integration-flavor=GONG_CONNECT_API",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"process-call-event"
+							],
+							"query": [
+								{
+									"key": "integration-flavor",
+									"value": "GONG_CONNECT_API"
+								}
+							]
+						},
+						"description": "Path C. COMPLETED is processable, but ownerIdentifier is empty so extractAppUser() returns null → failed() (sendToErrorTopic=false) → HTTP 200, body 'Done'. This is the path the repo's dev/simulate-entrypoints.sh exercises (it sends ownerIdentifier:[]). Reaches processing logic without needing a users-DB appuser."
+					},
+					"response": []
+				},
+				{
+					"name": "D — COMPLETED, unknown appuser → 200 failed (no seed)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyId\": 9001,\n  \"providerIdentifier\": \"smoke-test-call-1\",\n  \"providerIdentifierType\": \"ENGAGE_DIALER\",\n  \"providerName\": \"gong-connect\",\n  \"callStatus\": { \"type\": \"COMPLETED\" },\n  \"ownerIdentifier\": [ { \"type\": \"APPUSER_ID\", \"value\": \"999999\" } ],\n  \"direction\": \"OUTBOUND\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/process-call-event?integration-flavor=GONG_CONNECT_API",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"process-call-event"
+							],
+							"query": [
+								{
+									"key": "integration-flavor",
+									"value": "GONG_CONNECT_API"
+								}
+							]
+						},
+						"description": "Path D. COMPLETED with an APPUSER_ID that does not exist in the users DB → extractAppUser() returns null → failed() → HTTP 200, body 'Done'. Same 200-failed outcome as path C but exercises the appUserByIdCache lookup miss."
+					},
+					"response": []
+				},
+				{
+					"name": "G — COMPLETED, valid user, no integration → 500 [requires users-DB seed]",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyId\": 9003,\n  \"providerIdentifier\": \"smoke-test-call-g\",\n  \"providerIdentifierType\": \"ENGAGE_DIALER\",\n  \"providerName\": \"gong-connect\",\n  \"callStatus\": { \"type\": \"COMPLETED\" },\n  \"ownerIdentifier\": [ { \"type\": \"APPUSER_ID\", \"value\": \"700601\" } ],\n  \"direction\": \"OUTBOUND\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/process-call-event?integration-flavor=GONG_CONNECT_API",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"process-call-event"
+							],
+							"query": [
+								{
+									"key": "integration-flavor",
+									"value": "GONG_CONNECT_API"
+								}
+							]
+						},
+						"description": "Path G [requires seed-appuser-local.sql]. COMPLETED + a valid, active, shouldImportCalls appuser (700601), but company 9003 has NO CONNECTED GONG_CONNECT_API integration (it is AIRCALL/DISCONNECTED in dev/seed-dialers-local.sql). getIntegrationId() throws 'No integration found for company' → unexpectedfailure() → HTTP 500. Load processcallevent/seed-appuser-local.sql into honeyfy_dev first (creates appuser 700601 for company 9003)."
+					},
+					"response": []
+				},
+				{
+					"name": "H — COMPLETED, valid user + integration → 200 handled (call created) [requires users-DB seed]",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyId\": 9001,\n  \"providerIdentifier\": \"smoke-test-call-h\",\n  \"providerIdentifierType\": \"ENGAGE_DIALER\",\n  \"providerName\": \"gong-connect\",\n  \"callStatus\": { \"type\": \"COMPLETED\" },\n  \"recordingStatus\": { \"type\": \"NON_RECORDED\" },\n  \"ownerIdentifier\": [ { \"type\": \"APPUSER_ID\", \"value\": \"700501\" } ],\n  \"startTime\": \"2024-01-01T10:00:00Z\",\n  \"endTime\": \"2024-01-01T10:05:00Z\",\n  \"fromNumber\": \"+15550001001\",\n  \"toNumber\": \"+15550001002\",\n  \"direction\": \"OUTBOUND\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/process-call-event?integration-flavor=GONG_CONNECT_API",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"process-call-event"
+							],
+							"query": [
+								{
+									"key": "integration-flavor",
+									"value": "GONG_CONNECT_API"
+								}
+							]
+						},
+						"description": "Path H [requires seed-appuser-local.sql] — the true full-ingestion happy path (handled() → HTTP 200, a call/activity is created). Needs ALL of: (1) company 9001 has a CONNECTED GONG_CONNECT_API integration — already true in dev/seed-dialers-local.sql; (2) an active, shouldImportCalls appuser for company 9001 in honeyfy_dev — appuser 700501, created by processcallevent/seed-appuser-local.sql; (3) non-null callStatus AND recordingStatus (recordingStatus is dereferenced unconditionally on this path — a null would 500). recordingStatus=NON_RECORDED keeps it off the recording-download path."
+					},
+					"response": []
+				},
+				{
+					"name": "process-call-event — N times (loop=10)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyId\": 9001,\n  \"providerIdentifier\": \"smoke-test-call-1\",\n  \"providerIdentifierType\": \"ENGAGE_DIALER\",\n  \"providerName\": \"gong-connect\",\n  \"callStatus\": { \"type\": \"STARTED\" },\n  \"direction\": \"OUTBOUND\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/process-call-event?integration-flavor=GONG_CONNECT_API&loop=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"process-call-event"
+							],
+							"query": [
+								{
+									"key": "integration-flavor",
+									"value": "GONG_CONNECT_API"
+								},
+								{
+									"key": "loop",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Fires process-one-event N times (5s apart). Uses the path-A body so every iteration is a clean 200."
+					},
+					"response": []
+				},
+				{
+					"name": "process-call-event — loop until stopped (loop=true)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyId\": 9001,\n  \"providerIdentifier\": \"smoke-test-call-1\",\n  \"providerIdentifierType\": \"ENGAGE_DIALER\",\n  \"providerName\": \"gong-connect\",\n  \"callStatus\": { \"type\": \"STARTED\" },\n  \"direction\": \"OUTBOUND\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/process-call-event?integration-flavor=GONG_CONNECT_API&loop=true",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"process-call-event"
+							],
+							"query": [
+								{
+									"key": "integration-flavor",
+									"value": "GONG_CONNECT_API"
+								},
+								{
+									"key": "loop",
+									"value": "true"
+								}
+							]
+						},
+						"description": "Loops until stopped. This request blocks until the stop request is sent."
+					},
+					"response": []
+				},
+				{
+					"name": "process-call-event — stop loop",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/process-call-event/stop",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"process-call-event",
+								"stop"
+							]
+						},
+						"description": "Stops an in-progress loop=true run."
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
