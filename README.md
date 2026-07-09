@@ -15,3 +15,4 @@ The entry points triggered by this project will use the troubleshooters to trigg
 - Each module should have a postman collection to test the entrypoints.
 - Use postman Environments to set the environment variables. for base url to use localhost and dev (https://telephonysystemswebapi.modules.terry-collins-dev-env.c1-devex.ilc1.internal.gongio.net)
 - The postman collection should be stored on the module package level
+- The postman collection should contain folders to package modules and entrypoints.

@@ -1,16 +1,16 @@
 {
 	"info": {
 		"name": "gong-entrypoints — telephonysystems",
-		"description": "Triggers for the telephonysystems module entry points, exposed by the gong-entrypoints app. Requests are grouped into a folder per entrypoint. Set the active Postman Environment (telephonysystems.localhost or telephonysystems.dev) to point {{baseUrl}} at the running gong-entrypoints app.",
+		"description": "Triggers for the telephonysystems module entry points, exposed by the gong-entrypoints app. Requests are grouped into a folder per entrypoint. Set the active Postman Environment (telephonysystems.localhost) to point {{baseUrl}} at the running gong-entrypoints app (always localhost:8080). Use the X-Telephony-Target header on individual requests to switch the downstream target: absent/local → telephony.base-url (localhost:8097); hybrid → telephony.hybrid-url (configured in application.properties).",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
 		{
 			"name": "backfill",
-			"description": "Entrypoint #1 — backfill marked TSs (zero-arg smoke test). Proves the whole request → Supervisor → troubleshooter loop works. Always 200.",
+			"description": "Entrypoint #1 — backfill marked TSs (zero-arg smoke test). Proves the whole request → Supervisor → troubleshooter loop works. Always 200. Add header X-Telephony-Target: hybrid to hit the hybrid env instead of localhost.",
 			"item": [
 				{
-					"name": "backfill — once",
+					"name": "backfill — once (local)",
 					"request": {
 						"method": "POST",
 						"header": [],
@@ -24,7 +24,31 @@
 								"backfill"
 							]
 						},
-						"description": "Zero-arg smoke test. Fires the backfill-marked-TSs troubleshooter on IngesterTelephonySystemsSupervisor. Expect 200 with body 'Backfilled <n> TSs'."
+						"description": "Zero-arg smoke test targeting localhost:8097. Fires the backfill-marked-TSs troubleshooter on IngesterTelephonySystemsSupervisor. Expect 200 with body 'Backfilled <n> TSs'."
+					},
+					"response": []
+				},
+				{
+					"name": "backfill — once (hybrid)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Telephony-Target",
+								"value": "hybrid"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/backfill",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"backfill"
+							]
+						},
+						"description": "Same as 'backfill — once' but targets telephony.hybrid-url (host.docker.internal:8097 by default). Set telephony.hybrid-url in application.properties to match your hybrid env port."
 					},
 					"response": []
 				},
@@ -401,6 +425,385 @@
 							]
 						},
 						"description": "Stops an in-progress loop=true run."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "sync-one-call",
+			"description": "Entrypoint #3 — sync one call (pull/SYNC). Fetches a single call from the provider by id and runs it through the full sync pipeline (dialerServicesManager.syncOneCall). All inputs are query params; integration-flavor is derived downstream from company-id + integration-id. SyncStats are logged, not returned. For the actual sync to succeed the company/integration must be CONNECTED and reachable (company 9001 in dev/seed-dialers-local.sql).",
+			"item": [
+				{
+					"name": "sync-one-call — once",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/sync-one-call?company-id=9001&integration-id=9001&providerCallId=REPLACE_PROVIDER_CALL_ID&callDate=2024-01-01T00:00:00Z",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"sync-one-call"
+							],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "integration-id",
+									"value": "9001"
+								},
+								{
+									"key": "providerCallId",
+									"value": "REPLACE_PROVIDER_CALL_ID"
+								},
+								{
+									"key": "callDate",
+									"value": "2024-01-01T00:00:00Z",
+									"description": "ISO-8601. Required only for Amazon Connect; optional otherwise."
+								},
+								{
+									"key": "callUrl",
+									"value": "",
+									"description": "Optional recording URL override.",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Fetches one call from the provider and runs the full sync pipeline. Expect 200 with body 'Done; check logs to see the sync results;' — the SyncStats are in the service logs, not the response. Replace providerCallId with a real provider call id; company-id + integration-id must resolve to a CONNECTED integration."
+					},
+					"response": []
+				},
+				{
+					"name": "sync-one-call — N times (loop=10)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/sync-one-call?company-id=9001&integration-id=9001&providerCallId=REPLACE_PROVIDER_CALL_ID&loop=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"sync-one-call"
+							],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "integration-id",
+									"value": "9001"
+								},
+								{
+									"key": "providerCallId",
+									"value": "REPLACE_PROVIDER_CALL_ID"
+								},
+								{
+									"key": "loop",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Fires sync-one-call N times (5s apart). Set loop to the desired count."
+					},
+					"response": []
+				},
+				{
+					"name": "sync-one-call — loop until stopped (loop=true)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/sync-one-call?company-id=9001&integration-id=9001&providerCallId=REPLACE_PROVIDER_CALL_ID&loop=true",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"sync-one-call"
+							],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "integration-id",
+									"value": "9001"
+								},
+								{
+									"key": "providerCallId",
+									"value": "REPLACE_PROVIDER_CALL_ID"
+								},
+								{
+									"key": "loop",
+									"value": "true"
+								}
+							]
+						},
+						"description": "Loops until stopped. This request blocks until the stop request is sent."
+					},
+					"response": []
+				},
+				{
+					"name": "sync-one-call — stop loop",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/sync-one-call/stop",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"sync-one-call",
+								"stop"
+							]
+						},
+						"description": "Stops an in-progress loop=true run."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "sync-job",
+			"description": "Entrypoint #5 — High/Low-priority SyncJob (SQS) executor. The production periodic/backfill sync path (AbstractSyncJobMsgExecutor.execute, breakpoint line 80). execute() has no direct HTTP entry, so two on-demand routes reach it: run-chain-now (flips the scheduled event to now, most realistic) and send-message (puts a SyncJob JSON on the queue directly). Entrypoint #4 (Kafka TelephonyCallEventConsumer) has no troubleshooter route — use the process-call-event folder for the same downstream logic.",
+			"item": [
+				{
+					"name": "run-chain-now — once",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/sync-job/run-chain-now?company-id=9001&integration-id=9001&is-backfill=false",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"sync-job",
+								"run-chain-now"
+							],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "integration-id",
+									"value": "9001"
+								},
+								{
+									"key": "is-backfill",
+									"value": "false",
+									"description": "true routes to the low-priority (backfill) queue."
+								}
+							]
+						},
+						"description": "Variant A — flips the scheduled event's run-time to now so the chain enqueues a SyncJob on its own (most realistic). Reaches AbstractSyncJobMsgExecutor.execute() line 80. Expect 200."
+					},
+					"response": []
+				},
+				{
+					"name": "run-chain-now — N times (loop=10)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/sync-job/run-chain-now?company-id=9001&integration-id=9001&is-backfill=false&loop=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"sync-job",
+								"run-chain-now"
+							],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "integration-id",
+									"value": "9001"
+								},
+								{
+									"key": "is-backfill",
+									"value": "false"
+								},
+								{
+									"key": "loop",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Fires run-chain-now N times (5s apart)."
+					},
+					"response": []
+				},
+				{
+					"name": "run-chain-now — stop loop",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/sync-job/run-chain-now/stop",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"sync-job",
+								"run-chain-now",
+								"stop"
+							]
+						},
+						"description": "Stops an in-progress run-chain-now loop=true run."
+					},
+					"response": []
+				},
+				{
+					"name": "send-message — once",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyId\": 9001,\n  \"integrationId\": 9001,\n  \"integrationFlavorId\": \"GONG_CONNECT_API\",\n  \"backfill\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/sync-job/send-message?high-priority=true",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"sync-job",
+								"send-message"
+							],
+							"query": [
+								{
+									"key": "high-priority",
+									"value": "true",
+									"description": "Picks the queue: true = high-priority (periodic), false = low-priority (backfill)."
+								}
+							]
+						},
+						"description": "Variant B — puts a SyncJob JSON on the SQS queue directly, bypassing the scheduler and hitting execute() immediately (breakpoint line 80). The body is a SyncJob (companyId, integrationId, integrationFlavorId, backfill + optional syncStartDate/syncType); this app forwards it as the downstream 'message' query param. Returns the SQS message id."
+					},
+					"response": []
+				},
+				{
+					"name": "send-message — N times (loop=10)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyId\": 9001,\n  \"integrationId\": 9001,\n  \"integrationFlavorId\": \"GONG_CONNECT_API\",\n  \"backfill\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/sync-job/send-message?high-priority=true&loop=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"sync-job",
+								"send-message"
+							],
+							"query": [
+								{
+									"key": "high-priority",
+									"value": "true"
+								},
+								{
+									"key": "loop",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Puts a SyncJob on the queue N times (5s apart)."
+					},
+					"response": []
+				},
+				{
+					"name": "send-message — loop until stopped (loop=true)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyId\": 9001,\n  \"integrationId\": 9001,\n  \"integrationFlavorId\": \"GONG_CONNECT_API\",\n  \"backfill\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/sync-job/send-message?high-priority=true&loop=true",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"sync-job",
+								"send-message"
+							],
+							"query": [
+								{
+									"key": "high-priority",
+									"value": "true"
+								},
+								{
+									"key": "loop",
+									"value": "true"
+								}
+							]
+						},
+						"description": "Loops until stopped. This request blocks until the stop request is sent."
+					},
+					"response": []
+				},
+				{
+					"name": "send-message — stop loop",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/telephonysystems/sync-job/send-message/stop",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"telephonysystems",
+								"sync-job",
+								"send-message",
+								"stop"
+							]
+						},
+						"description": "Stops an in-progress send-message loop=true run."
 					},
 					"response": []
 				}
