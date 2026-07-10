@@ -16,3 +16,4 @@ The entry points triggered by this project will use the troubleshooters to trigg
 - Use postman Environments to set the environment variables. for base url to use localhost and dev (https://telephonysystemswebapi.modules.terry-collins-dev-env.c1-devex.ilc1.internal.gongio.net)
 - The postman collection should be stored on the module package level
 - The postman collection should contain folders to package modules and entrypoints.
+- Every downstream RestClient must register a `DownstreamLoggingInterceptor` tagged with its target mode (`local`/`hybrid`), so each entrypoint logs one INFO line per call: the downstream URL, target, and payload. New entrypoints inherit this automatically when they route through a `*Target` bean; a standalone `RestClient` bean must add the interceptor itself.
