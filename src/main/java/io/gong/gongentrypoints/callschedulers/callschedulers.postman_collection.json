@@ -1,0 +1,491 @@
+{
+	"info": {
+		"name": "gong-entrypoints — callschedulers",
+		"description": "Triggers for the callschedulers module entry points, exposed by the gong-entrypoints app. Requests are grouped into a folder per entrypoint. Set the active Postman Environment (callschedulers.localhost) to point {{baseUrl}} at the running gong-entrypoints app (always localhost:8080). The downstream CallScheduler must be running locally on port 8091 (IntelliJ 'CallScheduler' run config).",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "send-calendar-event",
+			"description": "Entrypoint #2 — send a calendar event through the core scheduling pipeline. Submits a CallSchedulingRequest (type CALENDAR_EVENT) to the troubleshooter, which puts it on the CALL_SCHEDULING_REQUESTS Kafka topic. The consumer drives the full pipeline: distributed lock → callSchedulingRequestsService.callIncomingCalendarInviteHandler() → validation → scheduling decision. Breakpoint: CallSchedulingRequestsConsumer.accept() line 87. callCreationMechanism=CALENDAR_SYNC is the standard non-email calendar-sync path (no opt-in email side-effects). companyId=9001, userId=501, emailAddress=alice@acme-corp.test (from seed-dialers-local.sql in gong-telephony-systems/dev/).",
+			"item": [
+				{
+					"name": "A — CALENDAR_EVENT, future meeting (happy path smoke test)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyId\": 9001,\n  \"callSchedulingEventType\": \"CALENDAR_EVENT\",\n  \"callCreationMechanism\": \"CALENDAR_SYNC\",\n  \"calendarPayload\": {\n    \"userId\": 501,\n    \"emailAddress\": \"alice@acme-corp.test\",\n    \"provider\": \"google\",\n    \"providerEventId\": \"smoke-test-event-001\",\n    \"iCalUID\": \"smoke-test-event-001@google.com\",\n    \"recurringEventId\": null,\n    \"etag\": \"1234567890\",\n    \"organizer\": {\n      \"name\": \"Alice\",\n      \"emailAddress\": \"alice@acme-corp.test\",\n      \"responseStatus\": \"ACCEPTED\",\n      \"role\": \"ORGANIZER\"\n    },\n    \"creator\": null,\n    \"invitees\": [\n      {\n        \"name\": \"Bob\",\n        \"emailAddress\": \"bob@acme-corp.test\",\n        \"responseStatus\": \"ACCEPTED\",\n        \"role\": \"PARTICIPANT\"\n      }\n    ],\n    \"startTime\": \"2026-08-01T10:00:00Z\",\n    \"endTime\": \"2026-08-01T11:00:00Z\",\n    \"createTime\": \"2026-07-01T09:00:00Z\",\n    \"lastModifiedTime\": \"2026-07-01T09:00:00Z\",\n    \"originalStartTime\": null,\n    \"summary\": \"Smoke Test Meeting\",\n    \"description\": \"https://zoom.us/j/123456789\",\n    \"location\": null,\n    \"additionalMeetingUrls\": [],\n    \"isPrivateOrConfidential\": false,\n    \"isAllDay\": false,\n    \"isCancelled\": false,\n    \"isRecurrent\": false,\n    \"isCrmIntegrationEnabled\": false,\n    \"isMeetingIndexed\": false\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/send-calendar-event",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"send-calendar-event"
+							]
+						},
+						"description": "Path A — standard CALENDAR_SYNC event, future meeting, non-recurring. The event goes onto the Kafka topic and the consumer drives it through the full scheduling pipeline. Expect 200, body 'Done'. companyId=9001 (Acme Corp), userId=501 (Alice), emailAddress=alice@acme-corp.test — from seed-dialers-local.sql. The Zoom URL in description exercises the meeting-URL extraction path."
+					},
+					"response": []
+				},
+				{
+					"name": "B — CALENDAR_EVENT, cancelled meeting (cancellation path)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyId\": 9001,\n  \"callSchedulingEventType\": \"CALENDAR_EVENT\",\n  \"callCreationMechanism\": \"CALENDAR_SYNC\",\n  \"calendarPayload\": {\n    \"userId\": 501,\n    \"emailAddress\": \"alice@acme-corp.test\",\n    \"provider\": \"google\",\n    \"providerEventId\": \"smoke-test-event-001\",\n    \"iCalUID\": \"smoke-test-event-001@google.com\",\n    \"recurringEventId\": null,\n    \"etag\": \"1234567891\",\n    \"organizer\": {\n      \"name\": \"Alice\",\n      \"emailAddress\": \"alice@acme-corp.test\",\n      \"responseStatus\": \"ACCEPTED\",\n      \"role\": \"ORGANIZER\"\n    },\n    \"creator\": null,\n    \"invitees\": [\n      {\n        \"name\": \"Bob\",\n        \"emailAddress\": \"bob@acme-corp.test\",\n        \"responseStatus\": \"ACCEPTED\",\n        \"role\": \"PARTICIPANT\"\n      }\n    ],\n    \"startTime\": \"2026-08-01T10:00:00Z\",\n    \"endTime\": \"2026-08-01T11:00:00Z\",\n    \"createTime\": \"2026-07-01T09:00:00Z\",\n    \"lastModifiedTime\": \"2026-07-10T09:00:00Z\",\n    \"originalStartTime\": null,\n    \"summary\": \"Smoke Test Meeting\",\n    \"description\": null,\n    \"location\": null,\n    \"additionalMeetingUrls\": [],\n    \"isPrivateOrConfidential\": false,\n    \"isAllDay\": false,\n    \"isCancelled\": true,\n    \"isRecurrent\": false,\n    \"isCrmIntegrationEnabled\": false,\n    \"isMeetingIndexed\": false\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/send-calendar-event",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"send-calendar-event"
+							]
+						},
+						"description": "Path B — same iCalUID as path A but isCancelled=true. Exercises the CalendarCancelEvent branch in toCalendarEvent() and the cancellation leg of the scheduling pipeline. Run path A first to create the scheduled call, then this to cancel it. Expect 200, body 'Done'."
+					},
+					"response": []
+				},
+				{
+					"name": "A — CALENDAR_EVENT, future meeting (hybrid)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-CallSchedulers-Target",
+								"value": "hybrid"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyId\": 9001,\n  \"callSchedulingEventType\": \"CALENDAR_EVENT\",\n  \"callCreationMechanism\": \"CALENDAR_SYNC\",\n  \"calendarPayload\": {\n    \"userId\": 501,\n    \"emailAddress\": \"alice@acme-corp.test\",\n    \"provider\": \"google\",\n    \"providerEventId\": \"smoke-test-event-001\",\n    \"iCalUID\": \"smoke-test-event-001@google.com\",\n    \"recurringEventId\": null,\n    \"etag\": \"1234567890\",\n    \"organizer\": {\n      \"name\": \"Alice\",\n      \"emailAddress\": \"alice@acme-corp.test\",\n      \"responseStatus\": \"ACCEPTED\",\n      \"role\": \"ORGANIZER\"\n    },\n    \"creator\": null,\n    \"invitees\": [\n      {\n        \"name\": \"Bob\",\n        \"emailAddress\": \"bob@acme-corp.test\",\n        \"responseStatus\": \"ACCEPTED\",\n        \"role\": \"PARTICIPANT\"\n      }\n    ],\n    \"startTime\": \"2026-08-01T10:00:00Z\",\n    \"endTime\": \"2026-08-01T11:00:00Z\",\n    \"createTime\": \"2026-07-01T09:00:00Z\",\n    \"lastModifiedTime\": \"2026-07-01T09:00:00Z\",\n    \"originalStartTime\": null,\n    \"summary\": \"Smoke Test Meeting\",\n    \"description\": \"https://zoom.us/j/123456789\",\n    \"location\": null,\n    \"additionalMeetingUrls\": [],\n    \"isPrivateOrConfidential\": false,\n    \"isAllDay\": false,\n    \"isCancelled\": false,\n    \"isRecurrent\": false,\n    \"isCrmIntegrationEnabled\": false,\n    \"isMeetingIndexed\": false\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/send-calendar-event",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"send-calendar-event"
+							]
+						},
+						"description": "Same as path A but targets callschedulers.hybrid-url (callscheduler.modules.terry-collins-dev-env.c1-devex.ilc1.internal.gongio.net). Requires VPN. Set a breakpoint at CallSchedulingRequestsConsumer.accept() in the hybrid CallScheduler to observe the full pipeline."
+					},
+					"response": []
+				},
+				{
+					"name": "send-calendar-event — N times (loop=10)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyId\": 9001,\n  \"callSchedulingEventType\": \"CALENDAR_EVENT\",\n  \"callCreationMechanism\": \"CALENDAR_SYNC\",\n  \"calendarPayload\": {\n    \"userId\": 501,\n    \"emailAddress\": \"alice@acme-corp.test\",\n    \"provider\": \"google\",\n    \"providerEventId\": \"smoke-test-event-001\",\n    \"iCalUID\": \"smoke-test-event-001@google.com\",\n    \"recurringEventId\": null,\n    \"etag\": \"1234567890\",\n    \"organizer\": {\n      \"name\": \"Alice\",\n      \"emailAddress\": \"alice@acme-corp.test\",\n      \"responseStatus\": \"ACCEPTED\",\n      \"role\": \"ORGANIZER\"\n    },\n    \"creator\": null,\n    \"invitees\": [],\n    \"startTime\": \"2026-08-01T10:00:00Z\",\n    \"endTime\": \"2026-08-01T11:00:00Z\",\n    \"createTime\": \"2026-07-01T09:00:00Z\",\n    \"lastModifiedTime\": \"2026-07-01T09:00:00Z\",\n    \"originalStartTime\": null,\n    \"summary\": \"Smoke Test Meeting\",\n    \"description\": null,\n    \"location\": null,\n    \"additionalMeetingUrls\": [],\n    \"isPrivateOrConfidential\": false,\n    \"isAllDay\": false,\n    \"isCancelled\": false,\n    \"isRecurrent\": false,\n    \"isCrmIntegrationEnabled\": false,\n    \"isMeetingIndexed\": false\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/send-calendar-event?loop=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"send-calendar-event"
+							],
+							"query": [
+								{
+									"key": "loop",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Fires the calendar event N times (5s apart). Uses the path-A body so every iteration is a clean schedule attempt."
+					},
+					"response": []
+				},
+				{
+					"name": "send-calendar-event — stop loop",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/send-calendar-event/stop",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"send-calendar-event",
+								"stop"
+							]
+						},
+						"description": "Stops an in-progress loop=true run."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "cancel-blacklisted-calls",
+			"description": "Entrypoint #1 — cancel blacklisted calls for a company. Cancels any scheduled call recordings whose participants are on the company's blacklist. Useful for verifying blacklist enforcement end-to-end without waiting for the next scheduled task run. Downstream: PUT /troubleshooting/blacklistedCalls/cancelBlacklistedForCompany on CallScheduler (TroubleshootingBlacklistedCalls.cancelBlacklistedForCompany).",
+			"item": [
+				{
+					"name": "cancel-blacklisted-calls — once (local)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/cancel-blacklisted-calls?company-id=9001",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"cancel-blacklisted-calls"
+							],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001",
+									"description": "The company whose blacklisted scheduled calls should be cancelled."
+								}
+							]
+						},
+						"description": "Cancels blacklisted calls targeting localhost:8091. Expect 200 with body 'Done — cancelled blacklisted calls for companyId=9001'."
+					},
+					"response": []
+				},
+				{
+					"name": "cancel-blacklisted-calls — once (hybrid)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-CallSchedulers-Target",
+								"value": "hybrid"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/cancel-blacklisted-calls?company-id=9001",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"cancel-blacklisted-calls"
+							],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001",
+									"description": "The company whose blacklisted scheduled calls should be cancelled."
+								}
+							]
+						},
+						"description": "Same as local but targets callschedulers.hybrid-url (callscheduler.modules.terry-collins-dev-env.c1-devex.ilc1.internal.gongio.net). Requires VPN. Set a breakpoint in TroubleshootingBlacklistedCalls.cancelBlacklistedForCompany() in the hybrid CallScheduler."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "cancel-call",
+			"description": "Entrypoint #3 — cancel a specific scheduled call by callId. Exercises ScheduledCallsActionsController.cancelScheduledCallByOwner() → CancelCallService.cancelByOwnerScheduledCall(). Use after send-calendar-event to get a callId, then cancel it. Downstream: POST /scheduledCallsActions/cancelScheduledCallByOwner.",
+			"item": [
+				{
+					"name": "cancel-call — once (local)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/cancel-call?call-id=<callId>&company-id=9001",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"cancel-call"
+							],
+							"query": [
+								{
+									"key": "call-id",
+									"value": "<callId>",
+									"description": "ID from scheduled_calls table. Run send-calendar-event first to create one."
+								},
+								{
+									"key": "company-id",
+									"value": "9001"
+								}
+							]
+						},
+						"description": "Cancels a specific scheduled call. Get the callId from the scheduled_calls table after running send-calendar-event. Expect 200 with body 'Done — cancelled callId=<id> for companyId=9001'."
+					},
+					"response": []
+				},
+				{
+					"name": "cancel-call — once (hybrid)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-CallSchedulers-Target",
+								"value": "hybrid"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/cancel-call?call-id=<callId>&company-id=9001",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"cancel-call"
+							],
+							"query": [
+								{
+									"key": "call-id",
+									"value": "<callId>"
+								},
+								{
+									"key": "company-id",
+									"value": "9001"
+								}
+							]
+						},
+						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "restore-call",
+			"description": "Entrypoint #4 — restore a previously cancelled scheduled call. Exercises ScheduledCallsActionsController.restoreCancelledCallByOwner() → RestoreCancelledCallService. Use after cancel-call to test the cancel → restore round-trip. Downstream: POST /scheduledCallsActions/restoreCancelledCallByOwner.",
+			"item": [
+				{
+					"name": "restore-call — once (local)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/restore-call?call-id=<callId>&company-id=9001",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"restore-call"
+							],
+							"query": [
+								{
+									"key": "call-id",
+									"value": "<callId>",
+									"description": "ID of a previously cancelled call. Run cancel-call first."
+								},
+								{
+									"key": "company-id",
+									"value": "9001"
+								}
+							]
+						},
+						"description": "Restores a cancelled scheduled call. Requires running send-calendar-event then cancel-call first. Expect 200 with body 'Done — restored callId=<id> for companyId=9001'."
+					},
+					"response": []
+				},
+				{
+					"name": "restore-call — once (hybrid)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-CallSchedulers-Target",
+								"value": "hybrid"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/restore-call?call-id=<callId>&company-id=9001",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"restore-call"
+							],
+							"query": [
+								{
+									"key": "call-id",
+									"value": "<callId>"
+								},
+								{
+									"key": "company-id",
+									"value": "9001"
+								}
+							]
+						},
+						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "cancel-internal-meetings",
+			"description": "Entrypoint #5 — cancel all internal meeting recordings for a company. Exercises ScheduledCallsActionsController.cancelScheduledInternalMeetingsCallsRecordings() → CancelCallService. Simulates a company admin disabling internal meeting recording. Downstream: POST /scheduledCallsActions/cancelScheduledInternalMeetingsCallsRecordings.",
+			"item": [
+				{
+					"name": "cancel-internal-meetings — once (local)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/cancel-internal-meetings?company-id=9001",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"cancel-internal-meetings"
+							],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								}
+							]
+						},
+						"description": "Cancels all internal meeting scheduled calls for company 9001. Expect 200 with body 'Done — cancelled internal meeting recordings for companyId=9001'. No-op if no internal meetings are scheduled."
+					},
+					"response": []
+				},
+				{
+					"name": "cancel-internal-meetings — once (hybrid)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-CallSchedulers-Target",
+								"value": "hybrid"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/cancel-internal-meetings?company-id=9001",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"cancel-internal-meetings"
+							],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								}
+							]
+						},
+						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "cancel-inactive-users",
+			"description": "Entrypoint #6 — cancel inactive users' scheduled calls and rescan co-invitees' calendars. The offboarding cleanup path. Exercises TroubleshootingInactiveUsersCalls.cancelInactiveUsersCallsAndRescanOtherCalendarsForCompany(). Only CALENDAR_INGESTER mechanism calls are affected. Downstream: POST /troubleshooting/inactive-users-calls/cancel-inactive-users-calls-and-rescan-other-calendars-for-company.",
+			"item": [
+				{
+					"name": "cancel-inactive-users — once (local, 7 days)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/cancel-inactive-users?company-id=9001&num-of-days=7",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"cancel-inactive-users"
+							],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "num-of-days",
+									"value": "7",
+									"description": "Users inactive for this many days are treated as inactive. Default: 7."
+								}
+							]
+						},
+						"description": "Cancels calls owned by users inactive ≥7 days, then rescans co-invitees. Expect 200. No-op if no matching inactive users are found."
+					},
+					"response": []
+				},
+				{
+					"name": "cancel-inactive-users — once (hybrid)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-CallSchedulers-Target",
+								"value": "hybrid"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/cancel-inactive-users?company-id=9001&num-of-days=7",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"cancel-inactive-users"
+							],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "num-of-days",
+									"value": "7"
+								}
+							]
+						},
+						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
