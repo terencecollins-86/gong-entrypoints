@@ -1,13 +1,13 @@
 {
 	"info": {
 		"name": "gong-entrypoints — telephonysystems",
-		"description": "Triggers for the telephonysystems module entry points, exposed by the gong-entrypoints app. Requests are grouped into a folder per entrypoint. Set the active Postman Environment (telephonysystems.localhost) to point {{baseUrl}} at the running gong-entrypoints app (always localhost:8080). Use the X-Telephony-Target header on individual requests to switch the downstream target: absent/local → telephony.base-url (localhost:8097); hybrid → telephony.hybrid-url (configured in application.properties).",
+		"description": "Triggers for the telephonysystems module entry points, exposed by the gong-entrypoints app. Requests are grouped into a folder per entrypoint. Set the active Postman Environment (telephonysystems.localhost) to point {{baseUrl}} at the running gong-entrypoints app (always localhost:8080).",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
 		{
 			"name": "backfill",
-			"description": "Entrypoint #1 — backfill marked TSs (zero-arg smoke test). Proves the whole request → Supervisor → troubleshooter loop works. Always 200. Add header X-Telephony-Target: hybrid to hit the hybrid env instead of localhost.",
+			"description": "Entrypoint #1 — backfill marked TSs (zero-arg smoke test). Proves the whole request → Supervisor → troubleshooter loop works. Always 200.",
 			"item": [
 				{
 					"name": "backfill — once (local)",
@@ -25,30 +25,6 @@
 							]
 						},
 						"description": "Zero-arg smoke test targeting localhost:8097. Fires the backfill-marked-TSs troubleshooter on IngesterTelephonySystemsSupervisor. Expect 200 with body 'Backfilled <n> TSs'."
-					},
-					"response": []
-				},
-				{
-					"name": "backfill — once (hybrid)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "X-Telephony-Target",
-								"value": "hybrid"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/telephonysystems/backfill",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"telephonysystems",
-								"backfill"
-							]
-						},
-						"description": "Same as 'backfill — once' but targets telephony.hybrid-url (host.docker.internal:8097 by default). Set telephony.hybrid-url in application.properties to match your hybrid env port."
 					},
 					"response": []
 				},

@@ -110,38 +110,6 @@
 					"response": []
 				},
 				{
-					"name": "A — CALENDAR_EVENT, future meeting (hybrid)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "X-CallSchedulers-Target",
-								"value": "hybrid"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"companyId\": 9001,\n  \"callSchedulingEventType\": \"CALENDAR_EVENT\",\n  \"callCreationMechanism\": \"CALENDAR_SYNC\",\n  \"calendarPayload\": {\n    \"userId\": 501,\n    \"emailAddress\": \"alice@acme-corp.com\",\n    \"provider\": \"Google\",\n    \"providerEventId\": \"smoke-test-event-001\",\n    \"iCalUID\": \"smoke-test-event-001@google.com\",\n    \"recurringEventId\": null,\n    \"etag\": \"1234567890\",\n    \"organizer\": {\n      \"name\": \"Alice\",\n      \"emailAddress\": \"alice@acme-corp.com\",\n      \"responseStatus\": \"ACCEPTED\",\n      \"role\": \"ORGANIZER\"\n    },\n    \"creator\": null,\n    \"invitees\": [\n      {\n        \"name\": \"Bob\",\n        \"emailAddress\": \"bob@acme-corp.com\",\n        \"responseStatus\": \"ACCEPTED\",\n        \"role\": \"PARTICIPANT\"\n      }\n    ],\n    \"startTime\": \"2026-08-01T10:00:00Z\",\n    \"endTime\": \"2026-08-01T11:00:00Z\",\n    \"createTime\": \"2026-07-01T09:00:00Z\",\n    \"lastModifiedTime\": \"2026-07-01T09:00:00Z\",\n    \"originalStartTime\": null,\n    \"summary\": \"Smoke Test Meeting\",\n    \"description\": \"https://zoom.us/j/123456789\",\n    \"location\": null,\n    \"additionalMeetingUrls\": [],\n    \"isPrivateOrConfidential\": false,\n    \"isAllDay\": false,\n    \"isCancelled\": false,\n    \"isRecurrent\": false,\n    \"isCrmIntegrationEnabled\": false,\n    \"isMeetingIndexed\": false\n  }\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/callschedulers/send-calendar-event",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"callschedulers",
-								"send-calendar-event"
-							]
-						},
-						"description": "Same as path A but targets callschedulers.hybrid-url (callscheduler.modules.terry-collins-dev-env.c1-devex.ilc1.internal.gongio.net). Requires VPN. Set a breakpoint at CallSchedulingRequestsConsumer.accept() in the hybrid CallScheduler to observe the full pipeline."
-					},
-					"response": []
-				},
-				{
 					"name": "send-calendar-event — N times (loop=10)",
 					"request": {
 						"method": "POST",
@@ -837,10 +805,10 @@
 		},
 		{
 			"name": "cancel-blacklisted-calls",
-			"description": "Entrypoint #1 — cancel blacklisted calls for a company. Cancels any scheduled call recordings whose participants are on the company's blacklist. Useful for verifying blacklist enforcement end-to-end without waiting for the next scheduled task run. Downstream: PUT /troubleshooting/blacklistedCalls/cancelBlacklistedForCompany on CallScheduler (TroubleshootingBlacklistedCalls.cancelBlacklistedForCompany).",
+			"description": "Entrypoint #1 — cancel blacklisted calls for a company. Cancels any scheduled call recordings whose participants are on the company's blacklist. SELF-CONTAINED — no setup step: the operation is a no-op if no blacklisted calls are currently scheduled for companyId=9001 (check the logs for 'blacklist' after firing). Downstream: PUT /troubleshooting/blacklistedCalls/cancelBlacklistedForCompany on CallScheduler (TroubleshootingBlacklistedCalls.cancelBlacklistedForCompany).",
 			"item": [
 				{
-					"name": "cancel-blacklisted-calls — once (local)",
+					"name": "1. cancel-blacklisted-calls — once (local)",
 					"request": {
 						"method": "POST",
 						"header": [],
@@ -862,37 +830,6 @@
 							]
 						},
 						"description": "Cancels blacklisted calls targeting localhost:8091. Expect 200 with body 'Done — cancelled blacklisted calls for companyId=9001'."
-					},
-					"response": []
-				},
-				{
-					"name": "cancel-blacklisted-calls — once (hybrid)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "X-CallSchedulers-Target",
-								"value": "hybrid"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/callschedulers/cancel-blacklisted-calls?company-id=9001",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"callschedulers",
-								"cancel-blacklisted-calls"
-							],
-							"query": [
-								{
-									"key": "company-id",
-									"value": "9001",
-									"description": "The company whose blacklisted scheduled calls should be cancelled."
-								}
-							]
-						},
-						"description": "Same as local but targets callschedulers.hybrid-url (callscheduler.modules.terry-collins-dev-env.c1-devex.ilc1.internal.gongio.net). Requires VPN. Set a breakpoint in TroubleshootingBlacklistedCalls.cancelBlacklistedForCompany() in the hybrid CallScheduler."
 					},
 					"response": []
 				}
@@ -973,40 +910,6 @@
 							]
 						},
 						"description": "Cancels the call created in step 1 (via the {{cancelCallId}} variable). Expect 200 with body 'Done — cancelled callId=<id> for companyId=9001'."
-					},
-					"response": []
-				},
-				{
-					"name": "cancel-call — once (hybrid)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "X-CallSchedulers-Target",
-								"value": "hybrid"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/callschedulers/cancel-call?call-id={{cancelCallId}}&company-id=9001",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"callschedulers",
-								"cancel-call"
-							],
-							"query": [
-								{
-									"key": "call-id",
-									"value": "{{cancelCallId}}"
-								},
-								{
-									"key": "company-id",
-									"value": "9001"
-								}
-							]
-						},
-						"description": "Same as step 2 but targets the hybrid CallScheduler. Requires VPN. Uses {{cancelCallId}} from the setup step (note: the setup step targets local — for a full hybrid round-trip, add X-CallSchedulers-Target: hybrid to the setup request too)."
 					},
 					"response": []
 				}
@@ -1119,49 +1022,40 @@
 						"description": "Restores the call cancelled in step 2 (via {{restoreCallId}}). Expect 200 with body 'Done — restored callId=<id> for companyId=9001'."
 					},
 					"response": []
-				},
-				{
-					"name": "restore-call — once (hybrid)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "X-CallSchedulers-Target",
-								"value": "hybrid"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/callschedulers/restore-call?call-id={{restoreCallId}}&company-id=9001",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"callschedulers",
-								"restore-call"
-							],
-							"query": [
-								{
-									"key": "call-id",
-									"value": "{{restoreCallId}}"
-								},
-								{
-									"key": "company-id",
-									"value": "9001"
-								}
-							]
-						},
-						"description": "Same as step 3 but targets the hybrid CallScheduler. Requires VPN. Uses {{restoreCallId}} from the setup steps (run steps 1–2 against the same target for a true hybrid round-trip — add X-CallSchedulers-Target: hybrid to them)."
-					},
-					"response": []
 				}
 			]
 		},
 		{
 			"name": "cancel-internal-meetings",
-			"description": "Entrypoint #5 — cancel all internal meeting recordings for a company. Exercises ScheduledCallsActionsController.cancelScheduledInternalMeetingsCallsRecordings() → CancelCallService. Simulates a company admin disabling internal meeting recording. Downstream: POST /scheduledCallsActions/cancelScheduledInternalMeetingsCallsRecordings.",
+			"description": "Entrypoint #5 — cancel all internal meeting recordings for a company. SELF-CONTAINED: run the two steps in order — step 1 creates an all-internal scheduled call via send-calendar-event (INTERNAL_MEETING_DISABLED scenario); step 2 cancels all internal calls for company 9001 (i.e. what it just created). Exercises ScheduledCallsActionsController.cancelScheduledInternalMeetingsCallsRecordings() → CancelCallService. NOTE: step 1 only creates an internal call when company 9001 has recordInternalMeetings=true — check callscheduler logs for resolution=NEW_CALL. If the company flag is false the scenario resolves INTERNAL_MEETING_RECORDING_DISABLED and nothing is created (then step 2 is a no-op). Downstream: POST /scheduledCallsActions/cancelScheduledInternalMeetingsCallsRecordings.",
 			"item": [
 				{
-					"name": "cancel-internal-meetings — once (local)",
+					"name": "1. setup — create an internal meeting (INTERNAL_MEETING_DISABLED scenario)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=INTERNAL_MEETING_DISABLED",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"send-calendar-event"
+							],
+							"query": [
+								{
+									"key": "scenario",
+									"value": "INTERNAL_MEETING_DISABLED"
+								}
+							]
+						},
+						"description": "Creates an all-internal scheduled call (all invitees from @acme-corp.com) for company 9001. Requires company 9001 to have recordInternalMeetings=true; if true, resolution=NEW_CALL and a SCHEDULED call appears in operational.public.call. Step 2 then cancels it. Breakpoint: CheckInternalMeetingAllowed.validate → CallBuilder."
+					},
+					"response": []
+				},
+				{
+					"name": "2. cancel-internal-meetings — once (local)",
 					"request": {
 						"method": "POST",
 						"header": [],
@@ -1181,37 +1075,7 @@
 								}
 							]
 						},
-						"description": "Cancels all internal meeting scheduled calls for company 9001. Expect 200 with body 'Done — cancelled internal meeting recordings for companyId=9001'. No-op if no internal meetings are scheduled."
-					},
-					"response": []
-				},
-				{
-					"name": "cancel-internal-meetings — once (hybrid)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "X-CallSchedulers-Target",
-								"value": "hybrid"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/callschedulers/cancel-internal-meetings?company-id=9001",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"callschedulers",
-								"cancel-internal-meetings"
-							],
-							"query": [
-								{
-									"key": "company-id",
-									"value": "9001"
-								}
-							]
-						},
-						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
+						"description": "Cancels all internal meeting scheduled calls for company 9001. Expect 200 with body 'Done — cancelled internal meeting recordings for companyId=9001'. Verify: SELECT id, status, capture_skip_code FROM public.call WHERE companyid=9001 AND capture_skip_code='INTERNAL_MEETING' ORDER BY id DESC."
 					},
 					"response": []
 				}
@@ -1219,10 +1083,10 @@
 		},
 		{
 			"name": "cancel-inactive-users",
-			"description": "Entrypoint #6 — cancel inactive users' scheduled calls and rescan co-invitees' calendars. The offboarding cleanup path. Exercises TroubleshootingInactiveUsersCalls.cancelInactiveUsersCallsAndRescanOtherCalendarsForCompany(). Only CALENDAR_INGESTER mechanism calls are affected. Downstream: POST /troubleshooting/inactive-users-calls/cancel-inactive-users-calls-and-rescan-other-calendars-for-company.",
+			"description": "Entrypoint #6 — cancel inactive users' scheduled calls and rescan co-invitees' calendars. The offboarding cleanup path. SELF-CONTAINED — no setup step needed: the operation is a no-op if no users have been inactive for ≥num-of-days (check callscheduler logs for 'inactive'). Only CALENDAR_INGESTER mechanism calls are affected. Exercises TroubleshootingInactiveUsersCalls.cancelInactiveUsersCallsAndRescanOtherCalendarsForCompany(). Downstream: POST /troubleshooting/inactive-users-calls/cancel-inactive-users-calls-and-rescan-other-calendars-for-company.",
 			"item": [
 				{
-					"name": "cancel-inactive-users — once (local, 7 days)",
+					"name": "1. cancel-inactive-users — once (local, 7 days)",
 					"request": {
 						"method": "POST",
 						"header": [],
@@ -1250,40 +1114,6 @@
 						"description": "Cancels calls owned by users inactive ≥7 days, then rescans co-invitees. Expect 200. No-op if no matching inactive users are found."
 					},
 					"response": []
-				},
-				{
-					"name": "cancel-inactive-users — once (hybrid)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "X-CallSchedulers-Target",
-								"value": "hybrid"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/callschedulers/cancel-inactive-users?company-id=9001&num-of-days=7",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"callschedulers",
-								"cancel-inactive-users"
-							],
-							"query": [
-								{
-									"key": "company-id",
-									"value": "9001"
-								},
-								{
-									"key": "num-of-days",
-									"value": "7"
-								}
-							]
-						},
-						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
-					},
-					"response": []
 				}
 			]
 		},
@@ -1309,44 +1139,20 @@
 						"description": "Runs the recurring-events scheduled task once. Expect 200 with body 'Done'. Set a breakpoint on RecurringEventsCallScheduledTask.runTask() to watch the cron mechanism fire."
 					},
 					"response": []
-				},
-				{
-					"name": "run-recurring-scheduled-task — once (hybrid)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "X-CallSchedulers-Target",
-								"value": "hybrid"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/callschedulers/run-recurring-scheduled-task",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"callschedulers",
-								"run-recurring-scheduled-task"
-							]
-						},
-						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
-					},
-					"response": []
 				}
 			]
 		},
 		{
 			"name": "run-recurring-scheduled-task-for-event",
-			"description": "Entrypoint — run the recurring-events scheduled task scoped to a single iCalUID. Restricts execution to one recurring series (company-id + ical-uid) rather than scanning all rows. Use when run-recurring-scheduled-task is too broad: e.g. debugging why a specific series isn't generating upcoming occurrences. Downstream: POST /troubleshooting/recurring-meetings/run-scheduled-task-for-specific-event (TroubleshootingRecurringEmailScheduling.runRecurringEventsCallScheduledTaskForSpecificEvent).",
+			"description": "Entrypoint — run the recurring-events scheduled task scoped to a single iCalUID. SELF-CONTAINED: uses {{recurringICalUID}} set by the restore-recurring-event folder's step 1. Run that setup first, then fire step 1 here to regenerate upcoming occurrences for the series. Alternatively set {{recurringICalUID}} manually to an existing ical_uid in calendar_recurring_event. Downstream: POST /troubleshooting/recurring-meetings/run-scheduled-task-for-specific-event (TroubleshootingRecurringEmailScheduling.runRecurringEventsCallScheduledTaskForSpecificEvent).",
 			"item": [
 				{
-					"name": "run-recurring-scheduled-task-for-event — once (local)",
+					"name": "1. run-recurring-scheduled-task-for-event — once (local)",
 					"request": {
 						"method": "POST",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/callschedulers/run-recurring-scheduled-task-for-event?company-id=9001&ical-uid=<icalUid>",
+							"raw": "{{baseUrl}}/callschedulers/run-recurring-scheduled-task-for-event?company-id=9001&ical-uid={{recurringICalUID}}",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -1361,8 +1167,8 @@
 								},
 								{
 									"key": "ical-uid",
-									"value": "<icalUid>",
-									"description": "iCalUID of the recurring series. Find in calendar_recurring_event.ical_uid for companyId=9001."
+									"value": "{{recurringICalUID}}",
+									"description": "Auto-filled from restore-recurring-event step 1 ({{recurringICalUID}}). Or set manually to an ical_uid in calendar_recurring_event for companyId=9001."
 								},
 								{
 									"key": "num-of-days",
@@ -1378,41 +1184,7 @@
 								}
 							]
 						},
-						"description": "Runs the recurring-events task for a single iCalUID. Set a breakpoint on RecurringEventsCallScheduledTask.runTask() or RecurringEventService.executeRecurringEventsCallScheduledTask(). Expect 200 with body 'Done'. No-op if the series has no upcoming occurrences in the look-ahead window."
-					},
-					"response": []
-				},
-				{
-					"name": "run-recurring-scheduled-task-for-event — once (hybrid)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "X-CallSchedulers-Target",
-								"value": "hybrid"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/callschedulers/run-recurring-scheduled-task-for-event?company-id=9001&ical-uid=<icalUid>",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"callschedulers",
-								"run-recurring-scheduled-task-for-event"
-							],
-							"query": [
-								{
-									"key": "company-id",
-									"value": "9001"
-								},
-								{
-									"key": "ical-uid",
-									"value": "<icalUid>"
-								}
-							]
-						},
-						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
+						"description": "Runs the recurring-events task for the series in {{recurringICalUID}}. Breakpoint: RecurringEventsCallScheduledTask.runTask() or RecurringEventService.executeRecurringEventsCallScheduledTask(). Expect 200 'Done'. No-op if the series has no upcoming occurrences in the look-ahead window — widen num-of-days if needed."
 					},
 					"response": []
 				}
@@ -1420,50 +1192,61 @@
 		},
 		{
 			"name": "cancel-recurring-event",
-			"description": "Entrypoint — manually cancel a recurring event series. Marks the rule as cancelled in calendar_recurring_event and cancels all associated upcoming scheduled calls. Use before restore-recurring-event to test the recurring cancel → restore round-trip. Parallel to cancel-call for one-time events. Downstream: POST /troubleshooting/recurring-meetings/manually-cancel-recurring-event (TroubleshootingRecurringEmailScheduling.manuallyCancelRecurringEvent).",
+			"description": "Entrypoint — manually cancel a recurring event series. SELF-CONTAINED: run the two steps in order — step 1 creates a recurring series via send-calendar-event with a pinned iCalUID (stores {{recurringICalUID}}), step 2 cancels that series and all its upcoming calls. Parallel to cancel-call for one-time events. Downstream: POST /troubleshooting/recurring-meetings/manually-cancel-recurring-event (TroubleshootingRecurringEmailScheduling.manuallyCancelRecurringEvent).",
 			"item": [
 				{
-					"name": "cancel-recurring-event — once (local)",
+					"name": "1. setup — create a recurring series (captures {{recurringICalUID}})",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Pin the iCalUID so step 2 can cancel the exact series created here.",
+									"const iCalUID = 'recurring-cancel-001@google.com';",
+									"pm.collectionVariables.set('recurringICalUID', iCalUID);",
+									"pm.test('setup fired a recurring series event', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"console.log('recurringICalUID =', iCalUID);"
+								]
+							}
+						}
+					],
 					"request": {
 						"method": "POST",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/callschedulers/cancel-recurring-event?company-id=9001&ical-uid=<icalUid>",
+							"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=NEW_CALL&iCalUID=recurring-cancel-001@google.com",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
 								"callschedulers",
-								"cancel-recurring-event"
+								"send-calendar-event"
 							],
 							"query": [
 								{
-									"key": "company-id",
-									"value": "9001"
+									"key": "scenario",
+									"value": "NEW_CALL"
 								},
 								{
-									"key": "ical-uid",
-									"value": "<icalUid>",
-									"description": "iCalUID of the recurring series to cancel."
+									"key": "iCalUID",
+									"value": "recurring-cancel-001@google.com"
 								}
 							]
 						},
-						"description": "Cancels a recurring series and all its upcoming scheduled calls. Returns the count of cancelled events and calls (e.g. 'Cancelled event: 1, calls: 3'). Run restore-recurring-event afterwards to undo."
+						"description": "Fires a NEW_CALL calendar event pinned to iCalUID=recurring-cancel-001@google.com. The test script stores that UID in {{recurringICalUID}} so step 2 can cancel it without any manual lookup. Breakpoint: CallBuilder — NEW_CALL flow. Verify: SELECT * FROM call_scheduler.calendar_recurring_event WHERE company_id=9001 AND ical_uid='recurring-cancel-001@google.com'."
 					},
 					"response": []
 				},
 				{
-					"name": "cancel-recurring-event — once (hybrid)",
+					"name": "2. cancel-recurring-event — once (local)",
 					"request": {
 						"method": "POST",
-						"header": [
-							{
-								"key": "X-CallSchedulers-Target",
-								"value": "hybrid"
-							}
-						],
+						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/callschedulers/cancel-recurring-event?company-id=9001&ical-uid=<icalUid>",
+							"raw": "{{baseUrl}}/callschedulers/cancel-recurring-event?company-id=9001&ical-uid={{recurringICalUID}}",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -1478,11 +1261,12 @@
 								},
 								{
 									"key": "ical-uid",
-									"value": "<icalUid>"
+									"value": "{{recurringICalUID}}",
+									"description": "Auto-filled from step 1. The iCalUID of the series to cancel."
 								}
 							]
 						},
-						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
+						"description": "Cancels the recurring series created in step 1. Marks it cancelled in calendar_recurring_event and cancels all associated upcoming scheduled calls. Expect 200 with 'Cancelled event: 1, calls: N'. Run restore-recurring-event (steps 1–3) to undo."
 					},
 					"response": []
 				}
@@ -1490,50 +1274,91 @@
 		},
 		{
 			"name": "restore-recurring-event",
-			"description": "Entrypoint — restore a cancelled recurring event series. Clears the cancelled flag on the rule in calendar_recurring_event, making the series eligible for scheduling again. Use after cancel-recurring-event to test the recurring cancel → restore round-trip. Parallel to restore-call for one-time events. Downstream: POST /troubleshooting/recurring-meetings/restore-cancelled-recurring-main-event (TroubleshootingRecurringEmailScheduling.restoreCancelledMainEvent).",
+			"description": "Entrypoint — restore a cancelled recurring event series. SELF-CONTAINED round-trip: run the three steps in order — step 1 creates the series, step 2 cancels it, step 3 restores it. Uses {{recurringICalUID}} set by step 1. After restoring, run run-recurring-scheduled-task-for-event to regenerate upcoming call occurrences. Parallel to restore-call for one-time events. Downstream: POST /troubleshooting/recurring-meetings/restore-cancelled-recurring-main-event (TroubleshootingRecurringEmailScheduling.restoreCancelledMainEvent).",
 			"item": [
 				{
-					"name": "restore-recurring-event — once (local)",
+					"name": "1. setup — create a recurring series (captures {{recurringICalUID}})",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Pin the iCalUID so steps 2 and 3 act on the same series.",
+									"const iCalUID = 'recurring-restore-001@google.com';",
+									"pm.collectionVariables.set('recurringICalUID', iCalUID);",
+									"pm.test('setup fired a recurring series event', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"console.log('recurringICalUID =', iCalUID);"
+								]
+							}
+						}
+					],
 					"request": {
 						"method": "POST",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/callschedulers/restore-recurring-event?company-id=9001&ical-uid=<icalUid>",
+							"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=NEW_CALL&iCalUID=recurring-restore-001@google.com",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
 								"callschedulers",
-								"restore-recurring-event"
+								"send-calendar-event"
 							],
 							"query": [
 								{
-									"key": "company-id",
-									"value": "9001"
+									"key": "scenario",
+									"value": "NEW_CALL"
 								},
 								{
-									"key": "ical-uid",
-									"value": "<icalUid>",
-									"description": "iCalUID of the previously cancelled recurring series."
+									"key": "iCalUID",
+									"value": "recurring-restore-001@google.com"
 								}
 							]
 						},
-						"description": "Restores a cancelled recurring series. Requires running cancel-recurring-event first. Expect 200 with body 'Done — restored recurring series ical-uid=<uid> for companyId=9001'. Does NOT re-create already-cancelled scheduled calls — run run-recurring-scheduled-task-for-event after restoring to regenerate them."
+						"description": "Fires a NEW_CALL calendar event pinned to iCalUID=recurring-restore-001@google.com. The test script stores that UID in {{recurringICalUID}}. Breakpoint: CallBuilder — NEW_CALL flow."
 					},
 					"response": []
 				},
 				{
-					"name": "restore-recurring-event — once (hybrid)",
+					"name": "2. setup — cancel that recurring series",
 					"request": {
 						"method": "POST",
-						"header": [
-							{
-								"key": "X-CallSchedulers-Target",
-								"value": "hybrid"
-							}
-						],
+						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/callschedulers/restore-recurring-event?company-id=9001&ical-uid=<icalUid>",
+							"raw": "{{baseUrl}}/callschedulers/cancel-recurring-event?company-id=9001&ical-uid={{recurringICalUID}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"cancel-recurring-event"
+							],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "ical-uid",
+									"value": "{{recurringICalUID}}",
+									"description": "The series created in step 1. Must be cancelled before it can be restored."
+								}
+							]
+						},
+						"description": "Cancels the series from step 1 so there is something to restore. Expect 'Cancelled event: 1, calls: N'."
+					},
+					"response": []
+				},
+				{
+					"name": "3. restore-recurring-event — once (local)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/restore-recurring-event?company-id=9001&ical-uid={{recurringICalUID}}",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -1548,11 +1373,12 @@
 								},
 								{
 									"key": "ical-uid",
-									"value": "<icalUid>"
+									"value": "{{recurringICalUID}}",
+									"description": "Auto-filled from step 1. The iCalUID of the previously cancelled series."
 								}
 							]
 						},
-						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
+						"description": "Restores the recurring series cancelled in step 2. Clears the cancelled flag in calendar_recurring_event. Expect 200 'Done — restored recurring series ical-uid=recurring-restore-001@google.com for companyId=9001'. Run run-recurring-scheduled-task-for-event after this to regenerate upcoming scheduled calls."
 					},
 					"response": []
 				}
@@ -1585,36 +1411,6 @@
 							]
 						},
 						"description": "Prunes updated_calendar_event rows older than 1 day. Run after a send-calendar-event loop session to keep the table manageable. Expect 200 with body 'Done'."
-					},
-					"response": []
-				},
-				{
-					"name": "delete-updated-calendar-events — once (hybrid)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "X-CallSchedulers-Target",
-								"value": "hybrid"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/callschedulers/delete-updated-calendar-events?days-back=1",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"callschedulers",
-								"delete-updated-calendar-events"
-							],
-							"query": [
-								{
-									"key": "days-back",
-									"value": "1"
-								}
-							]
-						},
-						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
 					},
 					"response": []
 				}
@@ -1714,30 +1510,6 @@
 						"description": "Stops an in-progress loop=true run."
 					},
 					"response": []
-				},
-				{
-					"name": "schedule-call-manually — once (hybrid)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "X-CallSchedulers-Target",
-								"value": "hybrid"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/callschedulers/schedule-call-manually",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"callschedulers",
-								"schedule-call-manually"
-							]
-						},
-						"description": "Same as local but targets callschedulers.hybrid-url. Requires VPN. Set a breakpoint at ManualSchedulingCallService.scheduleNewCallManually() in the hybrid CallScheduler."
-					},
-					"response": []
 				}
 			]
 		}
@@ -1752,6 +1524,11 @@
 			"key": "restoreCallId",
 			"value": "",
 			"description": "Auto-populated by the restore-call folder's setup step (step 1). The callId that gets cancelled then restored."
+		},
+		{
+			"key": "recurringICalUID",
+			"value": "",
+			"description": "Auto-populated by the cancel-recurring-event or restore-recurring-event folder's setup step (step 1). The iCalUID of the recurring series being exercised. Also consumed by run-recurring-scheduled-task-for-event."
 		}
 	]
 }

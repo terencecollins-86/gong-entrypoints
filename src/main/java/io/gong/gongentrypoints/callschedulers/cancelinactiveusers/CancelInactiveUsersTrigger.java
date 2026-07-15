@@ -1,9 +1,7 @@
 package io.gong.gongentrypoints.callschedulers.cancelinactiveusers;
 
 import io.gong.gongentrypoints.callschedulers.CallSchedulersTarget;
-import io.gong.gongentrypoints.callschedulers.CallSchedulersTarget.Mode;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -15,8 +13,6 @@ import org.springframework.web.bind.annotation.RestController;
  * can be re-scheduled under an active owner. This is the offboarding cleanup path.
  *
  * <p>Exercises {@code TroubleshootingInactiveUsersCalls.cancelInactiveUsersCallsAndRescanOtherCalendarsForCompany()}.
- *
- * <p>Pass {@code X-CallSchedulers-Target: hybrid} to hit the hybrid env instead of localhost.
  *
  * <p>Downstream call:
  * {@code POST /troubleshooting/inactive-users-calls/cancel-inactive-users-calls-and-rescan-other-calendars-for-company?company-id={companyId}&num-of-days={days}}
@@ -37,9 +33,8 @@ public class CancelInactiveUsersTrigger {
     @PostMapping("/callschedulers/cancel-inactive-users")
     public String cancelInactiveUsers(
             @RequestParam("company-id") long companyId,
-            @RequestParam(value = "num-of-days", defaultValue = "7") int numOfDays,
-            @RequestHeader(value = "X-CallSchedulers-Target", required = false, defaultValue = "local") Mode target) {
-        callSchedulersTarget.client(target).post()
+            @RequestParam(value = "num-of-days", defaultValue = "7") int numOfDays) {
+        callSchedulersTarget.client().post()
                 .uri(uriBuilder -> uriBuilder.path(CANCEL_INACTIVE_PATH)
                         .queryParam("company-id", companyId)
                         .queryParam("num-of-days", numOfDays)

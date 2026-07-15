@@ -1,9 +1,7 @@
 package io.gong.gongentrypoints.callschedulers.cancelcall;
 
 import io.gong.gongentrypoints.callschedulers.CallSchedulersTarget;
-import io.gong.gongentrypoints.callschedulers.CallSchedulersTarget.Mode;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -13,8 +11,6 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>Cancels a specific scheduled call recording identified by callId. The owner-cancel path
  * marks the call as cancelled and removes it from the scheduled recordings queue. Use this
  * to test the cancellation flow without waiting for a calendar delete event.
- *
- * <p>Pass {@code X-CallSchedulers-Target: hybrid} to hit the hybrid env instead of localhost.
  *
  * <p>Downstream call:
  * {@code POST /scheduledCallsActions/cancelScheduledCallByOwner?callId={callId}&companyId={companyId}}
@@ -35,9 +31,8 @@ public class CancelCallTrigger {
     @PostMapping("/callschedulers/cancel-call")
     public String cancelCall(
             @RequestParam("call-id") long callId,
-            @RequestParam("company-id") long companyId,
-            @RequestHeader(value = "X-CallSchedulers-Target", required = false, defaultValue = "local") Mode target) {
-        callSchedulersTarget.client(target).post()
+            @RequestParam("company-id") long companyId) {
+        callSchedulersTarget.client().post()
                 .uri(uriBuilder -> uriBuilder.path(CANCEL_CALL_PATH)
                         .queryParam("callId", callId)
                         .queryParam("companyId", companyId)

@@ -1,10 +1,8 @@
 package io.gong.gongentrypoints.callschedulers.runrecurringscheduledtask;
 
 import io.gong.gongentrypoints.callschedulers.CallSchedulersTarget;
-import io.gong.gongentrypoints.callschedulers.CallSchedulersTarget.Mode;
 import io.gong.gongentrypoints.telephonysystems.TriggerLoop;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,8 +23,6 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>{@code loop=true} → loop until {@code POST /callschedulers/run-recurring-scheduled-task/stop}</li>
  * </ul>
  *
- * <p>Pass {@code X-CallSchedulers-Target: hybrid} to hit the hybrid env instead of localhost.
- *
  * <p>Downstream call: {@code POST /troubleshooting/recurring-meetings/run-scheduled-task} on
  * {@code CallScheduler} ({@code RecurringEventsCallScheduledTask.runTask()}).
  */
@@ -45,9 +41,8 @@ public class RunRecurringScheduledTaskTrigger {
 
     @PostMapping("/callschedulers/run-recurring-scheduled-task")
     public String runRecurringScheduledTask(
-            @RequestParam(required = false) String loop,
-            @RequestHeader(value = "X-CallSchedulers-Target", required = false, defaultValue = "local") Mode target) {
-        return triggerLoop.run(loop, () -> fireOnce(target));
+            @RequestParam(required = false) String loop) {
+        return triggerLoop.run(loop, this::fireOnce);
     }
 
     /** Stops an in-progress {@code loop=true} run. */
@@ -56,8 +51,8 @@ public class RunRecurringScheduledTaskTrigger {
         return triggerLoop.stop();
     }
 
-    private String fireOnce(Mode target) {
-        return callSchedulersTarget.client(target).post()
+    private String fireOnce() {
+        return callSchedulersTarget.client().post()
                 .uri(RUN_SCHEDULED_TASK_PATH)
                 .retrieve()
                 .body(String.class);

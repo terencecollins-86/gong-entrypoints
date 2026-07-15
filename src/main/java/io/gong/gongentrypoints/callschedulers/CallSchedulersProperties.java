@@ -10,5 +10,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * overriding {@code callschedulers.base-url}.
  */
 @ConfigurationProperties(prefix = "callschedulers")
-public record CallSchedulersProperties(String baseUrl, String hybridUrl) {
+public record CallSchedulersProperties(String baseUrl) {
 }

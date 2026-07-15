@@ -1,9 +1,7 @@
 package io.gong.gongentrypoints.callschedulers.recurringscheduledtaskforevent;
 
 import io.gong.gongentrypoints.callschedulers.CallSchedulersTarget;
-import io.gong.gongentrypoints.callschedulers.CallSchedulersTarget.Mode;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -14,8 +12,6 @@ import org.springframework.web.bind.annotation.RestController;
  * recurring series identified by {@code company-id} + {@code ical-uid}. Use this when the
  * blanket task is too broad — e.g. to debug why a specific series isn't generating upcoming
  * occurrences.
- *
- * <p>Pass {@code X-CallSchedulers-Target: hybrid} to hit the hybrid env instead of localhost.
  *
  * <p>Downstream call:
  * {@code POST /troubleshooting/recurring-meetings/run-scheduled-task-for-specific-event}
@@ -38,9 +34,8 @@ public class RunRecurringScheduledTaskForEventTrigger {
             @RequestParam("company-id") long companyId,
             @RequestParam("ical-uid") String icalUid,
             @RequestParam(value = "num-of-days", defaultValue = "14") int numOfDays,
-            @RequestParam(value = "include-cancelled", defaultValue = "false") boolean includeCancelled,
-            @RequestHeader(value = "X-CallSchedulers-Target", required = false, defaultValue = "local") Mode target) {
-        return callSchedulersTarget.client(target).post()
+            @RequestParam(value = "include-cancelled", defaultValue = "false") boolean includeCancelled) {
+        return callSchedulersTarget.client().post()
                 .uri(uriBuilder -> uriBuilder.path(PATH)
                         .queryParam("company-id", companyId)
                         .queryParam("ical-uid", icalUid)

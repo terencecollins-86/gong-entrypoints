@@ -10,5 +10,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * {@code remote} profile (see {@code application-remote.properties}).
  */
 @ConfigurationProperties(prefix = "telephony")
-public record TelephonyProperties(String baseUrl, String hybridUrl) {
+public record TelephonyProperties(String baseUrl) {
 }

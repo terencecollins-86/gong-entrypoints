@@ -1,7 +1,6 @@
 package io.gong.gongentrypoints.callschedulers.schedulecallmanually;
 
 import io.gong.gongentrypoints.callschedulers.CallSchedulersTarget;
-import io.gong.gongentrypoints.callschedulers.CallSchedulersTarget.Mode;
 import io.gong.gongentrypoints.telephonysystems.TriggerLoop;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -9,7 +8,6 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,8 +21,6 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>Each send uses a fresh {@code callId} and current-relative start/end times so a
  * {@code loop=N} run produces N genuinely-distinct scheduled calls.
- *
- * <p>Pass {@code X-CallSchedulers-Target: hybrid} to hit the hybrid env instead of localhost.
  *
  * <p>Downstream call:
  * {@code POST /scheduledCallsActions/scheduleNewCallManually?companyId={companyId}} on
@@ -57,10 +53,9 @@ public class ScheduleCallManuallyTrigger {
             @RequestParam(value = "company-id", required = false, defaultValue = "9001") long companyId,
             @RequestParam(value = "workspace-id", required = false, defaultValue = "1001") long workspaceId,
             @RequestParam(value = "user-id", required = false, defaultValue = "501") long appUserId,
-            @RequestParam(value = "provider", required = false, defaultValue = DEFAULT_PROVIDER) String provider,
-            @RequestHeader(value = "X-CallSchedulers-Target", required = false, defaultValue = "local") Mode target) {
+            @RequestParam(value = "provider", required = false, defaultValue = DEFAULT_PROVIDER) String provider) {
         // Build the payload inside the loop lambda so every iteration gets a fresh callId + times.
-        return triggerLoop.run(loop, () -> fireOnce(target, companyId, buildDetails(companyId, workspaceId, appUserId, provider)));
+        return triggerLoop.run(loop, () -> fireOnce(companyId, buildDetails(companyId, workspaceId, appUserId, provider)));
     }
 
     /** Stops an in-progress {@code loop=true} run. */
@@ -81,8 +76,8 @@ public class ScheduleCallManuallyTrigger {
                 false, false);
     }
 
-    private String fireOnce(Mode target, long companyId, ManualCallDetails details) {
-        callSchedulersTarget.client(target).post()
+    private String fireOnce(long companyId, ManualCallDetails details) {
+        callSchedulersTarget.client().post()
                 .uri(uriBuilder -> uriBuilder.path(SCHEDULE_MANUALLY_PATH).queryParam("companyId", companyId).build())
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(details)

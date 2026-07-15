@@ -1,9 +1,7 @@
 package io.gong.gongentrypoints.callschedulers.deleteupdatedcalendarevents;
 
 import io.gong.gongentrypoints.callschedulers.CallSchedulersTarget;
-import io.gong.gongentrypoints.callschedulers.CallSchedulersTarget.Mode;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -13,8 +11,6 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>Prunes rows from {@code updated_calendar_event} older than {@code days-back}. Every
  * {@code send-calendar-event} call writes a row there; this task keeps the table from growing
  * unbounded during local loop testing. Equivalent to the nightly cleanup cron.
- *
- * <p>Pass {@code X-CallSchedulers-Target: hybrid} to hit the hybrid env instead of localhost.
  *
  * <p>Downstream call:
  * {@code POST /troubleshooting/updated-calendar-events/run-scheduled-task?daysBackToDelete={n}}
@@ -34,9 +30,8 @@ public class DeleteUpdatedCalendarEventsTrigger {
 
     @PostMapping("/callschedulers/delete-updated-calendar-events")
     public String deleteUpdatedCalendarEvents(
-            @RequestParam(value = "days-back", defaultValue = "1") long daysBack,
-            @RequestHeader(value = "X-CallSchedulers-Target", required = false, defaultValue = "local") Mode target) {
-        return callSchedulersTarget.client(target).post()
+            @RequestParam(value = "days-back", defaultValue = "1") long daysBack) {
+        return callSchedulersTarget.client().post()
                 .uri(uriBuilder -> uriBuilder.path(PATH)
                         .queryParam("daysBackToDelete", daysBack)
                         .build())
