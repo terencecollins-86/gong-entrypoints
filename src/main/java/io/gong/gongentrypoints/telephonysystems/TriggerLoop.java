@@ -14,7 +14,7 @@ import java.util.function.Supplier;
 public class TriggerLoop {
 
     /** Delay between iterations when firing N times or looping. */
-    private static final long ITERATION_DELAY_MS = 5_000;
+    private static final long ITERATION_DELAY_MS = 1_000;
 
     /** True while a {@code loop=true} run is active; flipped off by {@link #stop()}. */
     private final AtomicBoolean looping = new AtomicBoolean(false);

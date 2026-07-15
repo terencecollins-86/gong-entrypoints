@@ -1,14 +1,58 @@
 {
 	"info": {
 		"name": "gong-entrypoints — callschedulers",
-		"description": "Triggers for the callschedulers module entry points, exposed by the gong-entrypoints app. Requests are grouped into a folder per entrypoint. Set the active Postman Environment (callschedulers.localhost) to point {{baseUrl}} at the running gong-entrypoints app (always localhost:8080). The downstream CallScheduler must be running locally on port 8091 (IntelliJ 'CallScheduler' run config).",
+		"description": "Triggers for the callschedulers module entry points, exposed by the gong-entrypoints app. Requests are grouped into a folder per entrypoint. Set the active Postman Environment (callschedulers.localhost) to point {{baseUrl}} at the running gong-entrypoints app (always localhost:8080). The downstream CallScheduler must be running locally on port 8091 (IntelliJ 'CallScheduler' run config). NOTE: send-calendar-event now auto-generates a valid CallSchedulingRequest per send — a body is optional, and when supplied only the event IDs/timestamps are overridden. Loops fire 1/second.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
 		{
 			"name": "send-calendar-event",
-			"description": "Entrypoint #2 — send a calendar event through the core scheduling pipeline. Submits a CallSchedulingRequest (type CALENDAR_EVENT) to the troubleshooter, which puts it on the CALL_SCHEDULING_REQUESTS Kafka topic. The consumer drives the full pipeline: distributed lock → callSchedulingRequestsService.callIncomingCalendarInviteHandler() → validation → scheduling decision. Breakpoint: CallSchedulingRequestsConsumer.accept() line 87. callCreationMechanism=CALENDAR_SYNC is the standard non-email calendar-sync path (no opt-in email side-effects). companyId=9001, userId=501, emailAddress=alice@acme-corp.test (from seed-dialers-local.sql in gong-telephony-systems/dev/).",
+			"description": "Entrypoint #2 — send a calendar event through the core scheduling pipeline. Submits a CallSchedulingRequest (type CALENDAR_EVENT) to the troubleshooter, which puts it on the CALL_SCHEDULING_REQUESTS Kafka topic. The consumer drives the full pipeline: distributed lock → callSchedulingRequestsService.callIncomingCalendarInviteHandler() → validation → scheduling decision. Breakpoint: CallSchedulingRequestsConsumer.accept() line 87. The endpoint AUTO-GENERATES a valid payload per send: a body is optional (no body → fully generated; body present → used as base with a fresh providerEventId/iCalUID + current timestamps overridden per send). This makes loop=N produce N genuinely-processed events (each gets fresh IDs, so no TOO_OLD_REQUEST dedup rejection); the loop fires 1/second. Seed: companyId=9001, userId=501, emailAddress=alice@acme-corp.com, provider=Google, callCreationMechanism=CALENDAR_INGESTER (the largest happy path — writes updated_calendar_event, full validator chain). Use a real TLD (.com) — the validator rejects .test emails.",
 			"item": [
+				{
+					"name": "auto-generate — no body (happy path smoke test)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/send-calendar-event",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"send-calendar-event"
+							]
+						},
+						"description": "No body — the endpoint auto-generates a full valid CallSchedulingRequest with a random providerEventId/iCalUID and current timestamps, pinned to the seed (company 9001, user 501, alice@acme-corp.com, CALENDAR_INGESTER). Expect 200, body 'Done'. Check the callscheduler logs for resolution=NEW_CALL."
+					},
+					"response": []
+				},
+				{
+					"name": "auto-generate — no body, N times (loop=10, 1/sec)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/send-calendar-event?loop=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"send-calendar-event"
+							],
+							"query": [
+								{
+									"key": "loop",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Fires 10 auto-generated events, 1/second. Each gets a fresh providerEventId/iCalUID, so all 10 are processed downstream (no TOO_OLD_REQUEST dedup rejection). Verify 10 distinct rows in call_scheduler.updated_calendar_event WHERE company_id=9001."
+					},
+					"response": []
+				},
 				{
 					"name": "A — CALENDAR_EVENT, future meeting (happy path smoke test)",
 					"request": {
@@ -21,7 +65,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"companyId\": 9001,\n  \"callSchedulingEventType\": \"CALENDAR_EVENT\",\n  \"callCreationMechanism\": \"CALENDAR_SYNC\",\n  \"calendarPayload\": {\n    \"userId\": 501,\n    \"emailAddress\": \"alice@acme-corp.test\",\n    \"provider\": \"google\",\n    \"providerEventId\": \"smoke-test-event-001\",\n    \"iCalUID\": \"smoke-test-event-001@google.com\",\n    \"recurringEventId\": null,\n    \"etag\": \"1234567890\",\n    \"organizer\": {\n      \"name\": \"Alice\",\n      \"emailAddress\": \"alice@acme-corp.test\",\n      \"responseStatus\": \"ACCEPTED\",\n      \"role\": \"ORGANIZER\"\n    },\n    \"creator\": null,\n    \"invitees\": [\n      {\n        \"name\": \"Bob\",\n        \"emailAddress\": \"bob@acme-corp.test\",\n        \"responseStatus\": \"ACCEPTED\",\n        \"role\": \"PARTICIPANT\"\n      }\n    ],\n    \"startTime\": \"2026-08-01T10:00:00Z\",\n    \"endTime\": \"2026-08-01T11:00:00Z\",\n    \"createTime\": \"2026-07-01T09:00:00Z\",\n    \"lastModifiedTime\": \"2026-07-01T09:00:00Z\",\n    \"originalStartTime\": null,\n    \"summary\": \"Smoke Test Meeting\",\n    \"description\": \"https://zoom.us/j/123456789\",\n    \"location\": null,\n    \"additionalMeetingUrls\": [],\n    \"isPrivateOrConfidential\": false,\n    \"isAllDay\": false,\n    \"isCancelled\": false,\n    \"isRecurrent\": false,\n    \"isCrmIntegrationEnabled\": false,\n    \"isMeetingIndexed\": false\n  }\n}"
+							"raw": "{\n  \"companyId\": 9001,\n  \"callSchedulingEventType\": \"CALENDAR_EVENT\",\n  \"callCreationMechanism\": \"CALENDAR_SYNC\",\n  \"calendarPayload\": {\n    \"userId\": 501,\n    \"emailAddress\": \"alice@acme-corp.com\",\n    \"provider\": \"Google\",\n    \"providerEventId\": \"smoke-test-event-001\",\n    \"iCalUID\": \"smoke-test-event-001@google.com\",\n    \"recurringEventId\": null,\n    \"etag\": \"1234567890\",\n    \"organizer\": {\n      \"name\": \"Alice\",\n      \"emailAddress\": \"alice@acme-corp.com\",\n      \"responseStatus\": \"ACCEPTED\",\n      \"role\": \"ORGANIZER\"\n    },\n    \"creator\": null,\n    \"invitees\": [\n      {\n        \"name\": \"Bob\",\n        \"emailAddress\": \"bob@acme-corp.com\",\n        \"responseStatus\": \"ACCEPTED\",\n        \"role\": \"PARTICIPANT\"\n      }\n    ],\n    \"startTime\": \"2026-08-01T10:00:00Z\",\n    \"endTime\": \"2026-08-01T11:00:00Z\",\n    \"createTime\": \"2026-07-01T09:00:00Z\",\n    \"lastModifiedTime\": \"2026-07-01T09:00:00Z\",\n    \"originalStartTime\": null,\n    \"summary\": \"Smoke Test Meeting\",\n    \"description\": \"https://zoom.us/j/123456789\",\n    \"location\": null,\n    \"additionalMeetingUrls\": [],\n    \"isPrivateOrConfidential\": false,\n    \"isAllDay\": false,\n    \"isCancelled\": false,\n    \"isRecurrent\": false,\n    \"isCrmIntegrationEnabled\": false,\n    \"isMeetingIndexed\": false\n  }\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/callschedulers/send-calendar-event",
@@ -33,7 +77,7 @@
 								"send-calendar-event"
 							]
 						},
-						"description": "Path A — standard CALENDAR_SYNC event, future meeting, non-recurring. The event goes onto the Kafka topic and the consumer drives it through the full scheduling pipeline. Expect 200, body 'Done'. companyId=9001 (Acme Corp), userId=501 (Alice), emailAddress=alice@acme-corp.test — from seed-dialers-local.sql. The Zoom URL in description exercises the meeting-URL extraction path."
+						"description": "Path A — standard CALENDAR_SYNC event, future meeting, non-recurring. The event goes onto the Kafka topic and the consumer drives it through the full scheduling pipeline. Expect 200, body 'Done'. companyId=9001 (Acme Corp), userId=501 (Alice), emailAddress=alice@acme-corp.com — from seed-dialers-local.sql. The Zoom URL in description exercises the meeting-URL extraction path."
 					},
 					"response": []
 				},
@@ -49,7 +93,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"companyId\": 9001,\n  \"callSchedulingEventType\": \"CALENDAR_EVENT\",\n  \"callCreationMechanism\": \"CALENDAR_SYNC\",\n  \"calendarPayload\": {\n    \"userId\": 501,\n    \"emailAddress\": \"alice@acme-corp.test\",\n    \"provider\": \"google\",\n    \"providerEventId\": \"smoke-test-event-001\",\n    \"iCalUID\": \"smoke-test-event-001@google.com\",\n    \"recurringEventId\": null,\n    \"etag\": \"1234567891\",\n    \"organizer\": {\n      \"name\": \"Alice\",\n      \"emailAddress\": \"alice@acme-corp.test\",\n      \"responseStatus\": \"ACCEPTED\",\n      \"role\": \"ORGANIZER\"\n    },\n    \"creator\": null,\n    \"invitees\": [\n      {\n        \"name\": \"Bob\",\n        \"emailAddress\": \"bob@acme-corp.test\",\n        \"responseStatus\": \"ACCEPTED\",\n        \"role\": \"PARTICIPANT\"\n      }\n    ],\n    \"startTime\": \"2026-08-01T10:00:00Z\",\n    \"endTime\": \"2026-08-01T11:00:00Z\",\n    \"createTime\": \"2026-07-01T09:00:00Z\",\n    \"lastModifiedTime\": \"2026-07-10T09:00:00Z\",\n    \"originalStartTime\": null,\n    \"summary\": \"Smoke Test Meeting\",\n    \"description\": null,\n    \"location\": null,\n    \"additionalMeetingUrls\": [],\n    \"isPrivateOrConfidential\": false,\n    \"isAllDay\": false,\n    \"isCancelled\": true,\n    \"isRecurrent\": false,\n    \"isCrmIntegrationEnabled\": false,\n    \"isMeetingIndexed\": false\n  }\n}"
+							"raw": "{\n  \"companyId\": 9001,\n  \"callSchedulingEventType\": \"CALENDAR_EVENT\",\n  \"callCreationMechanism\": \"CALENDAR_SYNC\",\n  \"calendarPayload\": {\n    \"userId\": 501,\n    \"emailAddress\": \"alice@acme-corp.com\",\n    \"provider\": \"Google\",\n    \"providerEventId\": \"smoke-test-event-001\",\n    \"iCalUID\": \"smoke-test-event-001@google.com\",\n    \"recurringEventId\": null,\n    \"etag\": \"1234567891\",\n    \"organizer\": {\n      \"name\": \"Alice\",\n      \"emailAddress\": \"alice@acme-corp.com\",\n      \"responseStatus\": \"ACCEPTED\",\n      \"role\": \"ORGANIZER\"\n    },\n    \"creator\": null,\n    \"invitees\": [\n      {\n        \"name\": \"Bob\",\n        \"emailAddress\": \"bob@acme-corp.com\",\n        \"responseStatus\": \"ACCEPTED\",\n        \"role\": \"PARTICIPANT\"\n      }\n    ],\n    \"startTime\": \"2026-08-01T10:00:00Z\",\n    \"endTime\": \"2026-08-01T11:00:00Z\",\n    \"createTime\": \"2026-07-01T09:00:00Z\",\n    \"lastModifiedTime\": \"2026-07-10T09:00:00Z\",\n    \"originalStartTime\": null,\n    \"summary\": \"Smoke Test Meeting\",\n    \"description\": null,\n    \"location\": null,\n    \"additionalMeetingUrls\": [],\n    \"isPrivateOrConfidential\": false,\n    \"isAllDay\": false,\n    \"isCancelled\": true,\n    \"isRecurrent\": false,\n    \"isCrmIntegrationEnabled\": false,\n    \"isMeetingIndexed\": false\n  }\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/callschedulers/send-calendar-event",
@@ -81,7 +125,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"companyId\": 9001,\n  \"callSchedulingEventType\": \"CALENDAR_EVENT\",\n  \"callCreationMechanism\": \"CALENDAR_SYNC\",\n  \"calendarPayload\": {\n    \"userId\": 501,\n    \"emailAddress\": \"alice@acme-corp.test\",\n    \"provider\": \"google\",\n    \"providerEventId\": \"smoke-test-event-001\",\n    \"iCalUID\": \"smoke-test-event-001@google.com\",\n    \"recurringEventId\": null,\n    \"etag\": \"1234567890\",\n    \"organizer\": {\n      \"name\": \"Alice\",\n      \"emailAddress\": \"alice@acme-corp.test\",\n      \"responseStatus\": \"ACCEPTED\",\n      \"role\": \"ORGANIZER\"\n    },\n    \"creator\": null,\n    \"invitees\": [\n      {\n        \"name\": \"Bob\",\n        \"emailAddress\": \"bob@acme-corp.test\",\n        \"responseStatus\": \"ACCEPTED\",\n        \"role\": \"PARTICIPANT\"\n      }\n    ],\n    \"startTime\": \"2026-08-01T10:00:00Z\",\n    \"endTime\": \"2026-08-01T11:00:00Z\",\n    \"createTime\": \"2026-07-01T09:00:00Z\",\n    \"lastModifiedTime\": \"2026-07-01T09:00:00Z\",\n    \"originalStartTime\": null,\n    \"summary\": \"Smoke Test Meeting\",\n    \"description\": \"https://zoom.us/j/123456789\",\n    \"location\": null,\n    \"additionalMeetingUrls\": [],\n    \"isPrivateOrConfidential\": false,\n    \"isAllDay\": false,\n    \"isCancelled\": false,\n    \"isRecurrent\": false,\n    \"isCrmIntegrationEnabled\": false,\n    \"isMeetingIndexed\": false\n  }\n}"
+							"raw": "{\n  \"companyId\": 9001,\n  \"callSchedulingEventType\": \"CALENDAR_EVENT\",\n  \"callCreationMechanism\": \"CALENDAR_SYNC\",\n  \"calendarPayload\": {\n    \"userId\": 501,\n    \"emailAddress\": \"alice@acme-corp.com\",\n    \"provider\": \"Google\",\n    \"providerEventId\": \"smoke-test-event-001\",\n    \"iCalUID\": \"smoke-test-event-001@google.com\",\n    \"recurringEventId\": null,\n    \"etag\": \"1234567890\",\n    \"organizer\": {\n      \"name\": \"Alice\",\n      \"emailAddress\": \"alice@acme-corp.com\",\n      \"responseStatus\": \"ACCEPTED\",\n      \"role\": \"ORGANIZER\"\n    },\n    \"creator\": null,\n    \"invitees\": [\n      {\n        \"name\": \"Bob\",\n        \"emailAddress\": \"bob@acme-corp.com\",\n        \"responseStatus\": \"ACCEPTED\",\n        \"role\": \"PARTICIPANT\"\n      }\n    ],\n    \"startTime\": \"2026-08-01T10:00:00Z\",\n    \"endTime\": \"2026-08-01T11:00:00Z\",\n    \"createTime\": \"2026-07-01T09:00:00Z\",\n    \"lastModifiedTime\": \"2026-07-01T09:00:00Z\",\n    \"originalStartTime\": null,\n    \"summary\": \"Smoke Test Meeting\",\n    \"description\": \"https://zoom.us/j/123456789\",\n    \"location\": null,\n    \"additionalMeetingUrls\": [],\n    \"isPrivateOrConfidential\": false,\n    \"isAllDay\": false,\n    \"isCancelled\": false,\n    \"isRecurrent\": false,\n    \"isCrmIntegrationEnabled\": false,\n    \"isMeetingIndexed\": false\n  }\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/callschedulers/send-calendar-event",
@@ -109,7 +153,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"companyId\": 9001,\n  \"callSchedulingEventType\": \"CALENDAR_EVENT\",\n  \"callCreationMechanism\": \"CALENDAR_SYNC\",\n  \"calendarPayload\": {\n    \"userId\": 501,\n    \"emailAddress\": \"alice@acme-corp.test\",\n    \"provider\": \"google\",\n    \"providerEventId\": \"smoke-test-event-001\",\n    \"iCalUID\": \"smoke-test-event-001@google.com\",\n    \"recurringEventId\": null,\n    \"etag\": \"1234567890\",\n    \"organizer\": {\n      \"name\": \"Alice\",\n      \"emailAddress\": \"alice@acme-corp.test\",\n      \"responseStatus\": \"ACCEPTED\",\n      \"role\": \"ORGANIZER\"\n    },\n    \"creator\": null,\n    \"invitees\": [],\n    \"startTime\": \"2026-08-01T10:00:00Z\",\n    \"endTime\": \"2026-08-01T11:00:00Z\",\n    \"createTime\": \"2026-07-01T09:00:00Z\",\n    \"lastModifiedTime\": \"2026-07-01T09:00:00Z\",\n    \"originalStartTime\": null,\n    \"summary\": \"Smoke Test Meeting\",\n    \"description\": null,\n    \"location\": null,\n    \"additionalMeetingUrls\": [],\n    \"isPrivateOrConfidential\": false,\n    \"isAllDay\": false,\n    \"isCancelled\": false,\n    \"isRecurrent\": false,\n    \"isCrmIntegrationEnabled\": false,\n    \"isMeetingIndexed\": false\n  }\n}"
+							"raw": "{\n  \"companyId\": 9001,\n  \"callSchedulingEventType\": \"CALENDAR_EVENT\",\n  \"callCreationMechanism\": \"CALENDAR_SYNC\",\n  \"calendarPayload\": {\n    \"userId\": 501,\n    \"emailAddress\": \"alice@acme-corp.com\",\n    \"provider\": \"Google\",\n    \"providerEventId\": \"smoke-test-event-001\",\n    \"iCalUID\": \"smoke-test-event-001@google.com\",\n    \"recurringEventId\": null,\n    \"etag\": \"1234567890\",\n    \"organizer\": {\n      \"name\": \"Alice\",\n      \"emailAddress\": \"alice@acme-corp.com\",\n      \"responseStatus\": \"ACCEPTED\",\n      \"role\": \"ORGANIZER\"\n    },\n    \"creator\": null,\n    \"invitees\": [],\n    \"startTime\": \"2026-08-01T10:00:00Z\",\n    \"endTime\": \"2026-08-01T11:00:00Z\",\n    \"createTime\": \"2026-07-01T09:00:00Z\",\n    \"lastModifiedTime\": \"2026-07-01T09:00:00Z\",\n    \"originalStartTime\": null,\n    \"summary\": \"Smoke Test Meeting\",\n    \"description\": null,\n    \"location\": null,\n    \"additionalMeetingUrls\": [],\n    \"isPrivateOrConfidential\": false,\n    \"isAllDay\": false,\n    \"isCancelled\": false,\n    \"isRecurrent\": false,\n    \"isCrmIntegrationEnabled\": false,\n    \"isMeetingIndexed\": false\n  }\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/callschedulers/send-calendar-event?loop=10",
@@ -127,7 +171,32 @@
 								}
 							]
 						},
-						"description": "Fires the calendar event N times (5s apart). Uses the path-A body so every iteration is a clean schedule attempt."
+						"description": "Fires the calendar event N times (1/second) with an explicit body. The body is the base; each iteration's providerEventId/iCalUID and timestamps are overridden, so every send is a clean schedule attempt."
+					},
+					"response": []
+				},
+				{
+					"name": "auto-generate — no body, loop until stopped (loop=true, 1/sec)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/send-calendar-event?loop=true",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"send-calendar-event"
+							],
+							"query": [
+								{
+									"key": "loop",
+									"value": "true"
+								}
+							]
+						},
+						"description": "Fires auto-generated events 1/second until stopped. This request BLOCKS the connection until you hit 'send-calendar-event — stop loop' from another Postman tab / shell. Each iteration gets a fresh providerEventId/iCalUID, so all sends are processed (no TOO_OLD_REQUEST dedup rejection). Returns 'Loop stopped after N iterations' once stopped."
 					},
 					"response": []
 				},
@@ -150,6 +219,619 @@
 						"description": "Stops an in-progress loop=true run."
 					},
 					"response": []
+				},
+				{
+					"name": "path coverage",
+					"description": "Scenario-driven path coverage. Each Tier-A request is body-less and picks a target pipeline path with ?scenario=NAME; the endpoint auto-generates a payload that deterministically walks that path (fresh event IDs per send). Tier-B scenarios are stateful — fire the paired '…-setup' (a NEW_CALL) then '…-trigger', both sharing a pinned ?iCalUID, so the second send acts on the row the first created. See the README 'Path coverage' section for the breakpoint each scenario reaches. Requires seed-callscheduler-local.sql applied to honeyfy_dev (adds the should_record=FALSE user for USER_NOT_MARKED_FOR_RECORDING and the second should_record=TRUE user for CHANGED_OWNER).",
+					"item": [
+						{
+							"name": "NEW_CALL (happy path)",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=NEW_CALL",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "NEW_CALL"
+										}
+									]
+								},
+								"description": "Happy path. Breakpoint: CallBuilder — 'Entered new call flow'. Resolution NEW_CALL."
+							},
+							"response": []
+						},
+						{
+							"name": "PRIVATE_OR_CONFIDENTIAL",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=PRIVATE_OR_CONFIDENTIAL",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "PRIVATE_OR_CONFIDENTIAL"
+										}
+									]
+								},
+								"description": "isPrivateOrConfidential=true. Breakpoint: CheckEventRelevance.validate — 'Event is private or confidential'. Resolution PRIVATE_OR_CONFIDENTIAL_EVENT."
+							},
+							"response": []
+						},
+						{
+							"name": "NO_ICAL_ID",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=NO_ICAL_ID",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "NO_ICAL_ID"
+										}
+									]
+								},
+								"description": "iCalUID=null. Breakpoint: CheckEventRelevance.validate — 'Missing IcalID'. Resolution NO_ICAL_ID."
+							},
+							"response": []
+						},
+						{
+							"name": "NO_START_TIME",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=NO_START_TIME",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "NO_START_TIME"
+										}
+									]
+								},
+								"description": "startTime=null. Breakpoint: CheckEventRelevance.validate — 'Missing event start time'. Resolution NO_START_TIME."
+							},
+							"response": []
+						},
+						{
+							"name": "NO_END_TIME",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=NO_END_TIME",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "NO_END_TIME"
+										}
+									]
+								},
+								"description": "endTime=null. Breakpoint: CheckEventRelevance.validate — 'Missing event end time'. Resolution NO_END_TIME."
+							},
+							"response": []
+						},
+						{
+							"name": "OBSOLETE_EVENT",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=OBSOLETE_EVENT",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "OBSOLETE_EVENT"
+										}
+									]
+								},
+								"description": "startTime = now − 2h (end likewise past). Breakpoint: CheckEventRelevance.validate — 'Obsolete event'. Resolution OBSOLETE_EVENT."
+							},
+							"response": []
+						},
+						{
+							"name": "NO_CALL_IN_DETAILS",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=NO_CALL_IN_DETAILS",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "NO_CALL_IN_DETAILS"
+										}
+									]
+								},
+								"description": "description has no meeting URL, empty additionalMeetingUrls. Breakpoint: CheckUrlValidity → CallInDetailsService.validate — 'Invite without call in details'. Resolution NO_CALL_IN_DETAILS."
+							},
+							"response": []
+						},
+						{
+							"name": "CANNOT_IDENTIFY_CALL_OWNER",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=CANNOT_IDENTIFY_CALL_OWNER",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "CANNOT_IDENTIFY_CALL_OWNER"
+										}
+									]
+								},
+								"description": "organizer email = nobody@acme-corp.com (maps to no user). Breakpoint: CheckOrganizer.validate — 'Could not find an owner'. Resolution CANNOT_IDENTIFY_CALL_OWNER."
+							},
+							"response": []
+						},
+						{
+							"name": "UNKNOWN_PROVIDER",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=UNKNOWN_PROVIDER",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "UNKNOWN_PROVIDER"
+										}
+									]
+								},
+								"description": "provider=GoogleApps (invalid shortName; valid is Google). Breakpoint: CallSchedulingRequestsService.internalIncomingCalendarInviteHandler — throws IllegalArgumentException 'Unknown provider shortName'."
+							},
+							"response": []
+						},
+						{
+							"name": "USER_NOT_FOUND",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=USER_NOT_FOUND",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "USER_NOT_FOUND"
+										}
+									]
+								},
+								"description": "userId=999999 (unseeded). Breakpoint: CallSchedulingRequestsService.createCalendarOwner — throws RuntimeException 'User not found'."
+							},
+							"response": []
+						},
+						{
+							"name": "INTERNAL_MEETING_DISABLED (conditional — verify at runtime)",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=INTERNAL_MEETING_DISABLED",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "INTERNAL_MEETING_DISABLED"
+										}
+									]
+								},
+								"description": "All-internal meeting. Breakpoint: CheckInternalMeetingAllowed.validate. Only yields INTERNAL_MEETING_RECORDING_DISABLED when the company's recordInternalMeetings=false; otherwise falls through to NEW_CALL (then it's a Tier-C company-settings path — see README)."
+							},
+							"response": []
+						},
+						{
+							"name": "USER_NOT_MARKED_FOR_RECORDING",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=USER_NOT_MARKED_FOR_RECORDING",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "USER_NOT_MARKED_FOR_RECORDING"
+										}
+									]
+								},
+								"description": "userId/organizer = 503 (carol@acme-corp.com, should_record=FALSE from the expanded seed). Breakpoint: IncomingEventHandler.handleMeetingRequestForKnownUser — 'Invite disregarded … user marked as not synced'. Resolution USER_NOT_MARKED_FOR_RECORDING."
+							},
+							"response": []
+						},
+						{
+							"name": "TOO_OLD_REQUEST — setup (NEW_CALL, pinned iCalUID)",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=NEW_CALL&iCalUID=too-old-001@google.com",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "NEW_CALL"
+										},
+										{
+											"key": "iCalUID",
+											"value": "too-old-001@google.com"
+										}
+									]
+								},
+								"description": "Step 1: create the row for iCalUID=too-old-001@google.com. Then fire the '-trigger' request."
+							},
+							"response": []
+						},
+						{
+							"name": "TOO_OLD_REQUEST — trigger (same iCalUID, older lastModifiedTime)",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=TOO_OLD_REQUEST&iCalUID=too-old-001@google.com",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "TOO_OLD_REQUEST"
+										},
+										{
+											"key": "iCalUID",
+											"value": "too-old-001@google.com"
+										}
+									]
+								},
+								"description": "Step 2: same iCalUID, lastModifiedTime = now − 2h. Breakpoint: IncomingEventHandler.updateEventIfNotTooOld — 'Event is too old'. Resolution TOO_OLD_REQUEST."
+							},
+							"response": []
+						},
+						{
+							"name": "RESCHEDULED — setup (NEW_CALL, pinned iCalUID)",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=NEW_CALL&iCalUID=reschedule-001@google.com",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "NEW_CALL"
+										},
+										{
+											"key": "iCalUID",
+											"value": "reschedule-001@google.com"
+										}
+									]
+								},
+								"description": "Step 1: create the row for iCalUID=reschedule-001@google.com. Then fire the '-trigger' request."
+							},
+							"response": []
+						},
+						{
+							"name": "RESCHEDULED — trigger (same iCalUID, shifted startTime)",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=RESCHEDULED&iCalUID=reschedule-001@google.com",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "RESCHEDULED"
+										},
+										{
+											"key": "iCalUID",
+											"value": "reschedule-001@google.com"
+										}
+									]
+								},
+								"description": "Step 2: same iCalUID, startTime shifted +3h. Breakpoint: CallBuilder — reschedule branch. Resolution RESCHEDULED."
+							},
+							"response": []
+						},
+						{
+							"name": "CHANGED_OWNER — setup (NEW_CALL as user A, pinned iCalUID)",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=NEW_CALL&iCalUID=changed-owner-001@google.com",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "NEW_CALL"
+										},
+										{
+											"key": "iCalUID",
+											"value": "changed-owner-001@google.com"
+										}
+									]
+								},
+								"description": "Step 1: create the row as user A (501, alice). Then fire the '-trigger' request."
+							},
+							"response": []
+						},
+						{
+							"name": "CHANGED_OWNER — trigger (same iCalUID, owner B = user 502)",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=CHANGED_OWNER&iCalUID=changed-owner-001@google.com",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "CHANGED_OWNER"
+										},
+										{
+											"key": "iCalUID",
+											"value": "changed-owner-001@google.com"
+										}
+									]
+								},
+								"description": "Step 2: same iCalUID, organizer/userId = 502 (bob@acme-corp.com, a second should_record=TRUE seed user). Breakpoint: CallBuilder — changed-owner branch. Resolution CHANGED_OWNER."
+							},
+							"response": []
+						},
+						{
+							"name": "CANCELLED — setup (NEW_CALL, pinned iCalUID)",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=NEW_CALL&iCalUID=cancel-001@google.com",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "NEW_CALL"
+										},
+										{
+											"key": "iCalUID",
+											"value": "cancel-001@google.com"
+										}
+									]
+								},
+								"description": "Step 1: create the scheduled call for iCalUID=cancel-001@google.com. Then fire the '-trigger' request."
+							},
+							"response": []
+						},
+						{
+							"name": "CANCELLED — trigger (same iCalUID, isCancelled=true)",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=CANCELLED&iCalUID=cancel-001@google.com",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "CANCELLED"
+										},
+										{
+											"key": "iCalUID",
+											"value": "cancel-001@google.com"
+										}
+									]
+								},
+								"description": "Step 2: same iCalUID, isCancelled=true. Breakpoint: CallBuilder.cancelInviteesAndPossiblyCall → cancelCall — 'Marking call as cancelled'. Resolution CANCELLED."
+							},
+							"response": []
+						},
+						{
+							"name": "EMAIL_SYNC",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=EMAIL_SYNC",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "EMAIL_SYNC"
+										}
+									]
+								},
+								"description": "Emits an EMAIL_EVENT (MIME rawMessage) with callCreationMechanism=CALENDAR_SYNC_EMAIL — drives the handleEmailEventType arm of CallSchedulingRequestsConsumer.accept. Breakpoint: IncomingEmailInviteHandler.handleIncomingEmail → handleGeneralEmailEvent. From/ORGANIZER pinned to seed user alice@acme-corp.com."
+							},
+							"response": []
+						},
+						{
+							"name": "EMAIL_OPT_IN",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=EMAIL_OPT_IN",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "EMAIL_OPT_IN"
+										}
+									]
+								},
+								"description": "EMAIL_EVENT with callCreationMechanism=OPT_IN_EMAIL. Breakpoint: IncomingEmailInviteHandler.handleIncomingEmailForKnownCompany — isOptInEmail() branch (opt-in reply logic)."
+							},
+							"response": []
+						},
+						{
+							"name": "EMAIL_COORDINATOR",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/callschedulers/send-calendar-event?scenario=EMAIL_COORDINATOR",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"callschedulers",
+										"send-calendar-event"
+									],
+									"query": [
+										{
+											"key": "scenario",
+											"value": "EMAIL_COORDINATOR"
+										}
+									]
+								},
+								"description": "EMAIL_EVENT with callCreationMechanism=COORDINATOR_EMAIL. Breakpoint: CallSchedulingRequestsService.callIncomingEmailInviteHandler — COORDINATOR_EMAIL branch (updateOneTimeMeetingIfNeeded)."
+							},
+							"response": []
+						}
+					]
 				}
 			]
 		},
@@ -479,6 +1161,223 @@
 									"key": "num-of-days",
 									"value": "7"
 								}
+							]
+						},
+						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "run-recurring-scheduled-task",
+			"description": "Entrypoint — the recurring-events scheduled task (cron/batch mechanism). Zero-arg smoke test: runs RecurringEventsCallScheduledTask.runTask() downstream, scanning calendar_recurring_event and scheduling upcoming occurrences. Fires even against an empty table (scans, finds nothing) — proves the mechanism end-to-end. Downstream: POST /troubleshooting/recurring-meetings/run-scheduled-task.",
+			"item": [
+				{
+					"name": "run-recurring-scheduled-task — once (local)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/run-recurring-scheduled-task",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"run-recurring-scheduled-task"
+							]
+						},
+						"description": "Runs the recurring-events scheduled task once. Expect 200 with body 'Done'. Set a breakpoint on RecurringEventsCallScheduledTask.runTask() to watch the cron mechanism fire."
+					},
+					"response": []
+				},
+				{
+					"name": "run-recurring-scheduled-task — once (hybrid)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-CallSchedulers-Target",
+								"value": "hybrid"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/run-recurring-scheduled-task",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"run-recurring-scheduled-task"
+							]
+						},
+						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "run-recurring-scheduled-task-for-event",
+			"description": "Entrypoint — run the recurring-events scheduled task scoped to a single iCalUID. Restricts execution to one recurring series (company-id + ical-uid) rather than scanning all rows. Use when run-recurring-scheduled-task is too broad: e.g. debugging why a specific series isn't generating upcoming occurrences. Downstream: POST /troubleshooting/recurring-meetings/run-scheduled-task-for-specific-event (TroubleshootingRecurringEmailScheduling.runRecurringEventsCallScheduledTaskForSpecificEvent).",
+			"item": [
+				{
+					"name": "run-recurring-scheduled-task-for-event — once (local)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/run-recurring-scheduled-task-for-event?company-id=9001&ical-uid=<icalUid>",
+							"host": ["{{baseUrl}}"],
+							"path": ["callschedulers", "run-recurring-scheduled-task-for-event"],
+							"query": [
+								{"key": "company-id", "value": "9001"},
+								{"key": "ical-uid", "value": "<icalUid>", "description": "iCalUID of the recurring series. Find in calendar_recurring_event.ical_uid for companyId=9001."},
+								{"key": "num-of-days", "value": "14", "description": "Look-ahead window in days (default 14).", "disabled": true},
+								{"key": "include-cancelled", "value": "false", "description": "Whether to include cancelled occurrences (default false).", "disabled": true}
+							]
+						},
+						"description": "Runs the recurring-events task for a single iCalUID. Set a breakpoint on RecurringEventsCallScheduledTask.runTask() or RecurringEventService.executeRecurringEventsCallScheduledTask(). Expect 200 with body 'Done'. No-op if the series has no upcoming occurrences in the look-ahead window."
+					},
+					"response": []
+				},
+				{
+					"name": "run-recurring-scheduled-task-for-event — once (hybrid)",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "X-CallSchedulers-Target", "value": "hybrid"}],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/run-recurring-scheduled-task-for-event?company-id=9001&ical-uid=<icalUid>",
+							"host": ["{{baseUrl}}"],
+							"path": ["callschedulers", "run-recurring-scheduled-task-for-event"],
+							"query": [
+								{"key": "company-id", "value": "9001"},
+								{"key": "ical-uid", "value": "<icalUid>"}
+							]
+						},
+						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "cancel-recurring-event",
+			"description": "Entrypoint — manually cancel a recurring event series. Marks the rule as cancelled in calendar_recurring_event and cancels all associated upcoming scheduled calls. Use before restore-recurring-event to test the recurring cancel → restore round-trip. Parallel to cancel-call for one-time events. Downstream: POST /troubleshooting/recurring-meetings/manually-cancel-recurring-event (TroubleshootingRecurringEmailScheduling.manuallyCancelRecurringEvent).",
+			"item": [
+				{
+					"name": "cancel-recurring-event — once (local)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/cancel-recurring-event?company-id=9001&ical-uid=<icalUid>",
+							"host": ["{{baseUrl}}"],
+							"path": ["callschedulers", "cancel-recurring-event"],
+							"query": [
+								{"key": "company-id", "value": "9001"},
+								{"key": "ical-uid", "value": "<icalUid>", "description": "iCalUID of the recurring series to cancel."}
+							]
+						},
+						"description": "Cancels a recurring series and all its upcoming scheduled calls. Returns the count of cancelled events and calls (e.g. 'Cancelled event: 1, calls: 3'). Run restore-recurring-event afterwards to undo."
+					},
+					"response": []
+				},
+				{
+					"name": "cancel-recurring-event — once (hybrid)",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "X-CallSchedulers-Target", "value": "hybrid"}],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/cancel-recurring-event?company-id=9001&ical-uid=<icalUid>",
+							"host": ["{{baseUrl}}"],
+							"path": ["callschedulers", "cancel-recurring-event"],
+							"query": [
+								{"key": "company-id", "value": "9001"},
+								{"key": "ical-uid", "value": "<icalUid>"}
+							]
+						},
+						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "restore-recurring-event",
+			"description": "Entrypoint — restore a cancelled recurring event series. Clears the cancelled flag on the rule in calendar_recurring_event, making the series eligible for scheduling again. Use after cancel-recurring-event to test the recurring cancel → restore round-trip. Parallel to restore-call for one-time events. Downstream: POST /troubleshooting/recurring-meetings/restore-cancelled-recurring-main-event (TroubleshootingRecurringEmailScheduling.restoreCancelledMainEvent).",
+			"item": [
+				{
+					"name": "restore-recurring-event — once (local)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/restore-recurring-event?company-id=9001&ical-uid=<icalUid>",
+							"host": ["{{baseUrl}}"],
+							"path": ["callschedulers", "restore-recurring-event"],
+							"query": [
+								{"key": "company-id", "value": "9001"},
+								{"key": "ical-uid", "value": "<icalUid>", "description": "iCalUID of the previously cancelled recurring series."}
+							]
+						},
+						"description": "Restores a cancelled recurring series. Requires running cancel-recurring-event first. Expect 200 with body 'Done — restored recurring series ical-uid=<uid> for companyId=9001'. Does NOT re-create already-cancelled scheduled calls — run run-recurring-scheduled-task-for-event after restoring to regenerate them."
+					},
+					"response": []
+				},
+				{
+					"name": "restore-recurring-event — once (hybrid)",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "X-CallSchedulers-Target", "value": "hybrid"}],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/restore-recurring-event?company-id=9001&ical-uid=<icalUid>",
+							"host": ["{{baseUrl}}"],
+							"path": ["callschedulers", "restore-recurring-event"],
+							"query": [
+								{"key": "company-id", "value": "9001"},
+								{"key": "ical-uid", "value": "<icalUid>"}
+							]
+						},
+						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "delete-updated-calendar-events",
+			"description": "Entrypoint — delete old rows from updated_calendar_event. Every send-calendar-event call writes a row there; this task prunes rows older than days-back to keep the table clean during local loop testing. Default days-back=1 clears everything written today. Downstream: POST /troubleshooting/updated-calendar-events/run-scheduled-task (TroubleshootingDeleteUpdatedCalendarEvents.runDeleteUpdatedCalendarEventsScheduledTask).",
+			"item": [
+				{
+					"name": "delete-updated-calendar-events — once (local, 1 day)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/delete-updated-calendar-events?days-back=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["callschedulers", "delete-updated-calendar-events"],
+							"query": [
+								{"key": "days-back", "value": "1", "description": "Delete rows older than this many days. Default 1 — clears all rows written more than 24h ago."}
+							]
+						},
+						"description": "Prunes updated_calendar_event rows older than 1 day. Run after a send-calendar-event loop session to keep the table manageable. Expect 200 with body 'Done'."
+					},
+					"response": []
+				},
+				{
+					"name": "delete-updated-calendar-events — once (hybrid)",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "X-CallSchedulers-Target", "value": "hybrid"}],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/delete-updated-calendar-events?days-back=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["callschedulers", "delete-updated-calendar-events"],
+							"query": [
+								{"key": "days-back", "value": "1"}
 							]
 						},
 						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
