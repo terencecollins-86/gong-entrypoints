@@ -900,15 +900,59 @@
 		},
 		{
 			"name": "cancel-call",
-			"description": "Entrypoint #3 — cancel a specific scheduled call by callId. Exercises ScheduledCallsActionsController.cancelScheduledCallByOwner() → CancelCallService.cancelByOwnerScheduledCall(). Use after send-calendar-event to get a callId, then cancel it. Downstream: POST /scheduledCallsActions/cancelScheduledCallByOwner.",
+			"description": "Entrypoint #3 — cancel a specific scheduled call by callId. Exercises ScheduledCallsActionsController.cancelScheduledCallByOwner() → CancelCallService.cancelByOwnerScheduledCall(). SELF-CONTAINED: run the two requests in order top-to-bottom — step 1 creates a fresh call and captures its callId into the {{cancelCallId}} collection variable, step 2 cancels that exact call. No manual DB lookup or copy/paste. Downstream: POST /scheduledCallsActions/cancelScheduledCallByOwner.",
 			"item": [
 				{
-					"name": "cancel-call — once (local)",
+					"name": "1. setup — create a call (captures {{cancelCallId}})",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Capture the freshly-created callId so step 2 can cancel it — no DB lookup needed.",
+									"const m = pm.response.text().match(/callId=(\\d+)/);",
+									"pm.test('setup created a call and returned a callId', function () {",
+									"    pm.expect(m, 'response should contain callId=<id>').to.not.be.null;",
+									"});",
+									"if (m) {",
+									"    pm.collectionVariables.set('cancelCallId', m[1]);",
+									"    console.log('cancelCallId =', m[1]);",
+									"}"
+								]
+							}
+						}
+					],
 					"request": {
 						"method": "POST",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/callschedulers/cancel-call?call-id=<callId>&company-id=9001",
+							"raw": "{{baseUrl}}/callschedulers/schedule-call-manually?company-id=9001",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"schedule-call-manually"
+							],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								}
+							]
+						},
+						"description": "Creates a fresh MANUAL scheduled call (company 9001, seed user 501). The test script parses 'callId=<id>' from the response and stores it in the {{cancelCallId}} collection variable. Run this first, then step 2."
+					},
+					"response": []
+				},
+				{
+					"name": "2. cancel-call — once (local)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/cancel-call?call-id={{cancelCallId}}&company-id=9001",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -919,8 +963,8 @@
 							"query": [
 								{
 									"key": "call-id",
-									"value": "<callId>",
-									"description": "ID from scheduled_calls table. Run send-calendar-event first to create one."
+									"value": "{{cancelCallId}}",
+									"description": "Auto-filled from step 1 (the setup request). Run step 1 first, or set {{cancelCallId}} manually."
 								},
 								{
 									"key": "company-id",
@@ -928,7 +972,7 @@
 								}
 							]
 						},
-						"description": "Cancels a specific scheduled call. Get the callId from the scheduled_calls table after running send-calendar-event. Expect 200 with body 'Done — cancelled callId=<id> for companyId=9001'."
+						"description": "Cancels the call created in step 1 (via the {{cancelCallId}} variable). Expect 200 with body 'Done — cancelled callId=<id> for companyId=9001'."
 					},
 					"response": []
 				},
@@ -943,7 +987,7 @@
 							}
 						],
 						"url": {
-							"raw": "{{baseUrl}}/callschedulers/cancel-call?call-id=<callId>&company-id=9001",
+							"raw": "{{baseUrl}}/callschedulers/cancel-call?call-id={{cancelCallId}}&company-id=9001",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -954,7 +998,7 @@
 							"query": [
 								{
 									"key": "call-id",
-									"value": "<callId>"
+									"value": "{{cancelCallId}}"
 								},
 								{
 									"key": "company-id",
@@ -962,7 +1006,7 @@
 								}
 							]
 						},
-						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
+						"description": "Same as step 2 but targets the hybrid CallScheduler. Requires VPN. Uses {{cancelCallId}} from the setup step (note: the setup step targets local — for a full hybrid round-trip, add X-CallSchedulers-Target: hybrid to the setup request too)."
 					},
 					"response": []
 				}
@@ -970,15 +1014,89 @@
 		},
 		{
 			"name": "restore-call",
-			"description": "Entrypoint #4 — restore a previously cancelled scheduled call. Exercises ScheduledCallsActionsController.restoreCancelledCallByOwner() → RestoreCancelledCallService. Use after cancel-call to test the cancel → restore round-trip. Downstream: POST /scheduledCallsActions/restoreCancelledCallByOwner.",
+			"description": "Entrypoint #4 — restore a previously cancelled scheduled call. Exercises ScheduledCallsActionsController.restoreCancelledCallByOwner() → RestoreCancelledCallService. SELF-CONTAINED round-trip: run the three requests in order top-to-bottom — step 1 creates a fresh call and captures {{restoreCallId}}, step 2 cancels it, step 3 restores it. No manual DB lookup or copy/paste. Downstream: POST /scheduledCallsActions/restoreCancelledCallByOwner.",
 			"item": [
 				{
-					"name": "restore-call — once (local)",
+					"name": "1. setup — create a call (captures {{restoreCallId}})",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Capture the freshly-created callId so steps 2 and 3 act on the same call.",
+									"const m = pm.response.text().match(/callId=(\\d+)/);",
+									"pm.test('setup created a call and returned a callId', function () {",
+									"    pm.expect(m, 'response should contain callId=<id>').to.not.be.null;",
+									"});",
+									"if (m) {",
+									"    pm.collectionVariables.set('restoreCallId', m[1]);",
+									"    console.log('restoreCallId =', m[1]);",
+									"}"
+								]
+							}
+						}
+					],
 					"request": {
 						"method": "POST",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/callschedulers/restore-call?call-id=<callId>&company-id=9001",
+							"raw": "{{baseUrl}}/callschedulers/schedule-call-manually?company-id=9001",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"schedule-call-manually"
+							],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								}
+							]
+						},
+						"description": "Creates a fresh MANUAL scheduled call and stores its callId in {{restoreCallId}}. Run this first."
+					},
+					"response": []
+				},
+				{
+					"name": "2. setup — cancel that call",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/cancel-call?call-id={{restoreCallId}}&company-id=9001",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"cancel-call"
+							],
+							"query": [
+								{
+									"key": "call-id",
+									"value": "{{restoreCallId}}",
+									"description": "The call created in step 1. A call must be cancelled before it can be restored."
+								},
+								{
+									"key": "company-id",
+									"value": "9001"
+								}
+							]
+						},
+						"description": "Cancels the call from step 1 so there is something to restore. Expect 200 'Done — cancelled callId=<id> for companyId=9001'."
+					},
+					"response": []
+				},
+				{
+					"name": "3. restore-call — once (local)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/restore-call?call-id={{restoreCallId}}&company-id=9001",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -989,8 +1107,8 @@
 							"query": [
 								{
 									"key": "call-id",
-									"value": "<callId>",
-									"description": "ID of a previously cancelled call. Run cancel-call first."
+									"value": "{{restoreCallId}}",
+									"description": "Auto-filled from step 1. The call must have been cancelled (step 2) first."
 								},
 								{
 									"key": "company-id",
@@ -998,7 +1116,7 @@
 								}
 							]
 						},
-						"description": "Restores a cancelled scheduled call. Requires running send-calendar-event then cancel-call first. Expect 200 with body 'Done — restored callId=<id> for companyId=9001'."
+						"description": "Restores the call cancelled in step 2 (via {{restoreCallId}}). Expect 200 with body 'Done — restored callId=<id> for companyId=9001'."
 					},
 					"response": []
 				},
@@ -1013,7 +1131,7 @@
 							}
 						],
 						"url": {
-							"raw": "{{baseUrl}}/callschedulers/restore-call?call-id=<callId>&company-id=9001",
+							"raw": "{{baseUrl}}/callschedulers/restore-call?call-id={{restoreCallId}}&company-id=9001",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -1024,7 +1142,7 @@
 							"query": [
 								{
 									"key": "call-id",
-									"value": "<callId>"
+									"value": "{{restoreCallId}}"
 								},
 								{
 									"key": "company-id",
@@ -1032,7 +1150,7 @@
 								}
 							]
 						},
-						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
+						"description": "Same as step 3 but targets the hybrid CallScheduler. Requires VPN. Uses {{restoreCallId}} from the setup steps (run steps 1–2 against the same target for a true hybrid round-trip — add X-CallSchedulers-Target: hybrid to them)."
 					},
 					"response": []
 				}
@@ -1229,13 +1347,35 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/callschedulers/run-recurring-scheduled-task-for-event?company-id=9001&ical-uid=<icalUid>",
-							"host": ["{{baseUrl}}"],
-							"path": ["callschedulers", "run-recurring-scheduled-task-for-event"],
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"run-recurring-scheduled-task-for-event"
+							],
 							"query": [
-								{"key": "company-id", "value": "9001"},
-								{"key": "ical-uid", "value": "<icalUid>", "description": "iCalUID of the recurring series. Find in calendar_recurring_event.ical_uid for companyId=9001."},
-								{"key": "num-of-days", "value": "14", "description": "Look-ahead window in days (default 14).", "disabled": true},
-								{"key": "include-cancelled", "value": "false", "description": "Whether to include cancelled occurrences (default false).", "disabled": true}
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "ical-uid",
+									"value": "<icalUid>",
+									"description": "iCalUID of the recurring series. Find in calendar_recurring_event.ical_uid for companyId=9001."
+								},
+								{
+									"key": "num-of-days",
+									"value": "14",
+									"description": "Look-ahead window in days (default 14).",
+									"disabled": true
+								},
+								{
+									"key": "include-cancelled",
+									"value": "false",
+									"description": "Whether to include cancelled occurrences (default false).",
+									"disabled": true
+								}
 							]
 						},
 						"description": "Runs the recurring-events task for a single iCalUID. Set a breakpoint on RecurringEventsCallScheduledTask.runTask() or RecurringEventService.executeRecurringEventsCallScheduledTask(). Expect 200 with body 'Done'. No-op if the series has no upcoming occurrences in the look-ahead window."
@@ -1246,14 +1386,30 @@
 					"name": "run-recurring-scheduled-task-for-event — once (hybrid)",
 					"request": {
 						"method": "POST",
-						"header": [{"key": "X-CallSchedulers-Target", "value": "hybrid"}],
+						"header": [
+							{
+								"key": "X-CallSchedulers-Target",
+								"value": "hybrid"
+							}
+						],
 						"url": {
 							"raw": "{{baseUrl}}/callschedulers/run-recurring-scheduled-task-for-event?company-id=9001&ical-uid=<icalUid>",
-							"host": ["{{baseUrl}}"],
-							"path": ["callschedulers", "run-recurring-scheduled-task-for-event"],
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"run-recurring-scheduled-task-for-event"
+							],
 							"query": [
-								{"key": "company-id", "value": "9001"},
-								{"key": "ical-uid", "value": "<icalUid>"}
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "ical-uid",
+									"value": "<icalUid>"
+								}
 							]
 						},
 						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
@@ -1273,11 +1429,23 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/callschedulers/cancel-recurring-event?company-id=9001&ical-uid=<icalUid>",
-							"host": ["{{baseUrl}}"],
-							"path": ["callschedulers", "cancel-recurring-event"],
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"cancel-recurring-event"
+							],
 							"query": [
-								{"key": "company-id", "value": "9001"},
-								{"key": "ical-uid", "value": "<icalUid>", "description": "iCalUID of the recurring series to cancel."}
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "ical-uid",
+									"value": "<icalUid>",
+									"description": "iCalUID of the recurring series to cancel."
+								}
 							]
 						},
 						"description": "Cancels a recurring series and all its upcoming scheduled calls. Returns the count of cancelled events and calls (e.g. 'Cancelled event: 1, calls: 3'). Run restore-recurring-event afterwards to undo."
@@ -1288,14 +1456,30 @@
 					"name": "cancel-recurring-event — once (hybrid)",
 					"request": {
 						"method": "POST",
-						"header": [{"key": "X-CallSchedulers-Target", "value": "hybrid"}],
+						"header": [
+							{
+								"key": "X-CallSchedulers-Target",
+								"value": "hybrid"
+							}
+						],
 						"url": {
 							"raw": "{{baseUrl}}/callschedulers/cancel-recurring-event?company-id=9001&ical-uid=<icalUid>",
-							"host": ["{{baseUrl}}"],
-							"path": ["callschedulers", "cancel-recurring-event"],
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"cancel-recurring-event"
+							],
 							"query": [
-								{"key": "company-id", "value": "9001"},
-								{"key": "ical-uid", "value": "<icalUid>"}
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "ical-uid",
+									"value": "<icalUid>"
+								}
 							]
 						},
 						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
@@ -1315,11 +1499,23 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/callschedulers/restore-recurring-event?company-id=9001&ical-uid=<icalUid>",
-							"host": ["{{baseUrl}}"],
-							"path": ["callschedulers", "restore-recurring-event"],
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"restore-recurring-event"
+							],
 							"query": [
-								{"key": "company-id", "value": "9001"},
-								{"key": "ical-uid", "value": "<icalUid>", "description": "iCalUID of the previously cancelled recurring series."}
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "ical-uid",
+									"value": "<icalUid>",
+									"description": "iCalUID of the previously cancelled recurring series."
+								}
 							]
 						},
 						"description": "Restores a cancelled recurring series. Requires running cancel-recurring-event first. Expect 200 with body 'Done — restored recurring series ical-uid=<uid> for companyId=9001'. Does NOT re-create already-cancelled scheduled calls — run run-recurring-scheduled-task-for-event after restoring to regenerate them."
@@ -1330,14 +1526,30 @@
 					"name": "restore-recurring-event — once (hybrid)",
 					"request": {
 						"method": "POST",
-						"header": [{"key": "X-CallSchedulers-Target", "value": "hybrid"}],
+						"header": [
+							{
+								"key": "X-CallSchedulers-Target",
+								"value": "hybrid"
+							}
+						],
 						"url": {
 							"raw": "{{baseUrl}}/callschedulers/restore-recurring-event?company-id=9001&ical-uid=<icalUid>",
-							"host": ["{{baseUrl}}"],
-							"path": ["callschedulers", "restore-recurring-event"],
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"restore-recurring-event"
+							],
 							"query": [
-								{"key": "company-id", "value": "9001"},
-								{"key": "ical-uid", "value": "<icalUid>"}
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "ical-uid",
+									"value": "<icalUid>"
+								}
 							]
 						},
 						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
@@ -1357,10 +1569,19 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/callschedulers/delete-updated-calendar-events?days-back=1",
-							"host": ["{{baseUrl}}"],
-							"path": ["callschedulers", "delete-updated-calendar-events"],
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"delete-updated-calendar-events"
+							],
 							"query": [
-								{"key": "days-back", "value": "1", "description": "Delete rows older than this many days. Default 1 — clears all rows written more than 24h ago."}
+								{
+									"key": "days-back",
+									"value": "1",
+									"description": "Delete rows older than this many days. Default 1 — clears all rows written more than 24h ago."
+								}
 							]
 						},
 						"description": "Prunes updated_calendar_event rows older than 1 day. Run after a send-calendar-event loop session to keep the table manageable. Expect 200 with body 'Done'."
@@ -1371,13 +1592,26 @@
 					"name": "delete-updated-calendar-events — once (hybrid)",
 					"request": {
 						"method": "POST",
-						"header": [{"key": "X-CallSchedulers-Target", "value": "hybrid"}],
+						"header": [
+							{
+								"key": "X-CallSchedulers-Target",
+								"value": "hybrid"
+							}
+						],
 						"url": {
 							"raw": "{{baseUrl}}/callschedulers/delete-updated-calendar-events?days-back=1",
-							"host": ["{{baseUrl}}"],
-							"path": ["callschedulers", "delete-updated-calendar-events"],
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"delete-updated-calendar-events"
+							],
 							"query": [
-								{"key": "days-back", "value": "1"}
+								{
+									"key": "days-back",
+									"value": "1"
+								}
 							]
 						},
 						"description": "Same as local but targets the hybrid CallScheduler. Requires VPN."
@@ -1385,6 +1619,139 @@
 					"response": []
 				}
 			]
+		},
+		{
+			"name": "schedule-call-manually",
+			"description": "Entrypoint #12 — schedule a new call manually (use case A4). The direct scheduling path that bypasses calendar and email ingestion — stands in for the Gong UI action a user takes to say 'record this meeting'. Writes a MANUAL-mechanism row into operational.call. This is the second independent source of new scheduled calls (alongside send-calendar-event), so it's the fastest way to stream fresh MANUAL rows into a local DB. Each send uses a fresh callId + current-relative start/end times, so loop=N produces N distinct scheduled calls. Downstream: POST /scheduledCallsActions/scheduleNewCallManually?companyId=… (ScheduledCallsActionsController.scheduleNewCallManually), body ManualSchedulingCallDetails. Seed: company 9001, workspace 1001, user 501 (alice@acme-corp.com), provider ZOOM (the enabled seed provider). Breakpoint: ManualSchedulingCallService.scheduleNewCallManually().",
+			"item": [
+				{
+					"name": "schedule-call-manually — once (local)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/schedule-call-manually",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"schedule-call-manually"
+							]
+						},
+						"description": "Creates one MANUAL scheduled call pinned to the seed (company 9001, workspace 1001, user 501, provider ZOOM). The trigger builds a full ManualSchedulingCallDetails with a fresh random callId and start=now+1h / end=now+2h. Expect 200 with body 'Done — scheduled manual callId=<id> for companyId=9001'. Verify: SELECT * FROM operational.call WHERE company_id=9001 AND call_creation_mechanism='MANUAL' ORDER BY id DESC."
+					},
+					"response": []
+				},
+				{
+					"name": "schedule-call-manually — N times (loop=10, 1/sec)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/schedule-call-manually?loop=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"schedule-call-manually"
+							],
+							"query": [
+								{
+									"key": "loop",
+									"value": "10",
+									"description": "Fires 10 times, 1/second. Each gets a fresh callId, so all 10 create distinct scheduled calls."
+								}
+							]
+						},
+						"description": "Streams 10 distinct MANUAL scheduled calls, 1/second. Verify 10 new rows in operational.call WHERE company_id=9001 AND call_creation_mechanism='MANUAL'."
+					},
+					"response": []
+				},
+				{
+					"name": "schedule-call-manually — loop until stopped (loop=true, 1/sec)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/schedule-call-manually?loop=true",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"schedule-call-manually"
+							],
+							"query": [
+								{
+									"key": "loop",
+									"value": "true",
+									"description": "Loops 1/second until '/stop' is called from another tab. BLOCKS the connection until stopped."
+								}
+							]
+						},
+						"description": "Fires MANUAL scheduled calls 1/second until stopped. This request BLOCKS until you hit 'schedule-call-manually — stop loop' from another Postman tab / shell. Returns 'Loop stopped after N iterations' once stopped."
+					},
+					"response": []
+				},
+				{
+					"name": "schedule-call-manually — stop loop",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/schedule-call-manually/stop",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"schedule-call-manually",
+								"stop"
+							]
+						},
+						"description": "Stops an in-progress loop=true run."
+					},
+					"response": []
+				},
+				{
+					"name": "schedule-call-manually — once (hybrid)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-CallSchedulers-Target",
+								"value": "hybrid"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/callschedulers/schedule-call-manually",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"callschedulers",
+								"schedule-call-manually"
+							]
+						},
+						"description": "Same as local but targets callschedulers.hybrid-url. Requires VPN. Set a breakpoint at ManualSchedulingCallService.scheduleNewCallManually() in the hybrid CallScheduler."
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "cancelCallId",
+			"value": "",
+			"description": "Auto-populated by the cancel-call folder's setup step (step 1). The callId that gets cancelled."
+		},
+		{
+			"key": "restoreCallId",
+			"value": "",
+			"description": "Auto-populated by the restore-call folder's setup step (step 1). The callId that gets cancelled then restored."
 		}
 	]
 }
