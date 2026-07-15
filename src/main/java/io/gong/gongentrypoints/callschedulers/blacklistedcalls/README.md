@@ -53,13 +53,6 @@ to the company's blacklist table in `call_scheduler`.
 curl -X POST 'http://localhost:8080/callschedulers/cancel-blacklisted-calls?company-id=9001'
 ```
 
-## Trigger (hybrid)
-
-```bash
-curl -X POST 'http://localhost:8080/callschedulers/cancel-blacklisted-calls?company-id=9001' \
-  -H 'X-CallSchedulers-Target: hybrid'
-```
-
 ## Breakpoint
 
 `TroubleshootingBlacklistedCalls.cancelBlacklistedForCompany()` — entry point. Returns 200

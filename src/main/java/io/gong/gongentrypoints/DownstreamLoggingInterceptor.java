@@ -13,7 +13,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * Logs one INFO line per <b>downstream</b> call (the request gong-entrypoints makes to a
  * troubleshooter), not the inbound request. Prints the resolved downstream URL, the target
- * mode this client points at (local / hybrid), and the request body if any.
+ * mode this client points at, and the request body if any.
  *
  * <p>One instance is created per target mode so the {@code target=} field is accurate without
  * inspecting the URL.

@@ -55,13 +55,6 @@ email domain (e.g. all `@acme-corp.test`).
 curl -X POST 'http://localhost:8080/callschedulers/cancel-internal-meetings?company-id=9001'
 ```
 
-## Trigger (hybrid)
-
-```bash
-curl -X POST 'http://localhost:8080/callschedulers/cancel-internal-meetings?company-id=9001' \
-  -H 'X-CallSchedulers-Target: hybrid'
-```
-
 ## Breakpoint
 
 `CancelCallService.cancelScheduledInternalMeetingsCallsRecordings()` — entry point into the

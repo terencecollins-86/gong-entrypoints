@@ -54,13 +54,6 @@ The `callId` must already be cancelled. Use the full round-trip in order:
 curl -X POST 'http://localhost:8080/callschedulers/restore-call?call-id=<callId>&company-id=9001'
 ```
 
-## Trigger (hybrid)
-
-```bash
-curl -X POST 'http://localhost:8080/callschedulers/restore-call?call-id=<callId>&company-id=9001' \
-  -H 'X-CallSchedulers-Target: hybrid'
-```
-
 ## Breakpoint
 
 `RestoreCancelledCallService.restoreCancelledCallByOwner()` — entry point into the restore logic.

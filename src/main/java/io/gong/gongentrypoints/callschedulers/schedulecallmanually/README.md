@@ -70,13 +70,6 @@ curl -X POST 'http://localhost:8080/callschedulers/schedule-call-manually'
 curl -X POST 'http://localhost:8080/callschedulers/schedule-call-manually?loop=10'
 ```
 
-## Trigger (hybrid)
-
-```bash
-curl -X POST 'http://localhost:8080/callschedulers/schedule-call-manually' \
-  -H 'X-CallSchedulers-Target: hybrid'
-```
-
 ## Verify
 
 ```sql

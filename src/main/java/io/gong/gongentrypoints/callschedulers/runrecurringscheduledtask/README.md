@@ -55,13 +55,6 @@ No data prerequisite for the smoke test — the task runs against whatever is in
 curl -X POST 'http://localhost:8080/callschedulers/run-recurring-scheduled-task'
 ```
 
-## Trigger (hybrid)
-
-```bash
-curl -X POST 'http://localhost:8080/callschedulers/run-recurring-scheduled-task' \
-  -H 'X-CallSchedulers-Target: hybrid'
-```
-
 ## Trigger N times / loop
 
 ```bash

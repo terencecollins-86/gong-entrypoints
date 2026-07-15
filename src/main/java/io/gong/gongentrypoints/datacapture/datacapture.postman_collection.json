@@ -1,0 +1,500 @@
+{
+	"info": {
+		"name": "gong-entrypoints — datacapture",
+		"description": "Triggers for gong-data-capture (recording consent) entry points, exposed by the gong-entrypoints app. Requests are grouped into a folder per entrypoint. Set the active Postman Environment (datacapture.localhost) to point {{baseUrl}} at the running gong-entrypoints app (always localhost:8080). Two downstream services are involved: RecordingConsentApiServer (localhost:7254) for DCP endpoints, and RecordingConsentTasks (localhost:9095) for features, settings, Redis, and consent email endpoints.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "enable-consent — full flow",
+			"description": "SELF-CONTAINED end-to-end flow: list DCPs → assign DCP to user → migrate consent settings → populate Redis. Run the requests top-to-bottom to enable recording consent for a user. Step 1 captures {{dcpId}} from the list response (set manually after reading). Steps 2–4 can then be run in sequence.",
+			"item": [
+				{
+					"name": "1. list DCPs (find a valid dcp-id)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/dcp/list?company-id=9001",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "dcp", "list"],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								}
+							]
+						},
+						"description": "Lists all Data Capture Profiles for company 9001. Read the response to find a DCP ID, then set {{dcpId}} in the collection variable before running step 2."
+					},
+					"response": []
+				},
+				{
+					"name": "2. assign DCP to user (set {{dcpId}} first)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/dcp/set?company-id=9001&dcp-id={{dcpId}}&user-id=501",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "dcp", "set"],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "dcp-id",
+									"value": "{{dcpId}}",
+									"description": "Set this from the list-DCPs response (step 1), or override manually."
+								},
+								{
+									"key": "user-id",
+									"value": "501",
+									"description": "Seed user alice (userId=501, alice@acme-corp.com)."
+								}
+							]
+						},
+						"description": "Assigns the selected DCP to user 501 (alice). Controls which consent mechanism (jump-page vs. consent-email) is active for her. Requires {{dcpId}} from step 1."
+					},
+					"response": []
+				},
+				{
+					"name": "3. migrate consent settings (seed appuser_consent_settings)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/consent-settings/migrate?migrate-all=true",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "consent-settings", "migrate"],
+							"query": [
+								{
+									"key": "migrate-all",
+									"value": "true"
+								}
+							]
+						},
+						"description": "Upserts appuser_consent_settings rows for all eligible users in the recording_consent DB. migrate-all=true processes every user. Required before the consent email interaction flow works."
+					},
+					"response": []
+				},
+				{
+					"name": "4. populate Redis (force reload for company)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/consent-redis/populate?company-id=9001&force=true",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "consent-redis", "populate"],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "force",
+									"value": "true",
+									"description": "Bypass the already-loaded check and force a reload."
+								}
+							]
+						},
+						"description": "Forces Redis population of DCP jump-page data for company 9001. Run after assigning a DCP and migrating settings so the consent page resolves correctly."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "simulate-consent-email — full flow",
+			"description": "SELF-CONTAINED consent email simulation: seed Redis call details → simulate invitee acceptance. Step 1 generates a fresh callId and captures it in {{consentCallId}}. Step 2 fires the interaction event using that callId. Run top-to-bottom. Prerequisite: run the enable-consent flow first so consent settings and Redis are populated.",
+			"item": [
+				{
+					"name": "1. setup — seed Redis call details (captures {{consentCallId}})",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Capture the generated callId so step 2 can reference it.",
+									"const m = pm.response.text().match(/callId=(\\d+)/);",
+									"pm.test('setup seeded Redis and returned a callId', function () {",
+									"    pm.expect(m, 'response should contain callId=<id>').to.not.be.null;",
+									"});",
+									"if (m) {",
+									"    pm.collectionVariables.set('consentCallId', m[1]);",
+									"    console.log('consentCallId =', m[1]);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/consent-email/set-call-details?company-id=9001&owner-id=501",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "consent-email", "set-call-details"],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "owner-id",
+									"value": "501",
+									"description": "Seed call owner (alice, userId=501)."
+								}
+							]
+						},
+						"description": "Generates a fresh callId (via ConsentDataFaker) and seeds the Redis consent email call entry with a fake meeting title and future start time. The test script parses 'callId=<id>' from the response and stores it in {{consentCallId}}. Run this first, then step 2."
+					},
+					"response": []
+				},
+				{
+					"name": "2. send interaction event — ACCEPTED",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/consent-email/send-interaction-event?company-id=9001&call-id={{consentCallId}}&owner-id=501&response=ACCEPTED",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "consent-email", "send-interaction-event"],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "call-id",
+									"value": "{{consentCallId}}",
+									"description": "Auto-filled from step 1. Run step 1 first, or set {{consentCallId}} manually."
+								},
+								{
+									"key": "owner-id",
+									"value": "501"
+								},
+								{
+									"key": "response",
+									"value": "ACCEPTED",
+									"description": "ConsentEmailResponse enum — ACCEPTED, DENIED, or NO_RESPONSE."
+								}
+							]
+						},
+						"description": "Fires a consent interaction event for the call created in step 1. Generates fresh emailId and inviteeId automatically. Simulates the invitee accepting the consent email. Change response=DENIED to test the decline path."
+					},
+					"response": []
+				},
+				{
+					"name": "2b. send interaction event — DENIED",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/consent-email/send-interaction-event?company-id=9001&call-id={{consentCallId}}&owner-id=501&response=DENIED",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "consent-email", "send-interaction-event"],
+							"query": [
+								{
+									"key": "company-id",
+									"value": "9001"
+								},
+								{
+									"key": "call-id",
+									"value": "{{consentCallId}}",
+									"description": "Auto-filled from step 1."
+								},
+								{
+									"key": "owner-id",
+									"value": "501"
+								},
+								{
+									"key": "response",
+									"value": "DENIED"
+								}
+							]
+						},
+						"description": "Same as step 2 but simulates the invitee declining consent. Run after step 1 (uses the same {{consentCallId}})."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "dcp-profile",
+			"description": "Data Capture Profile read/list operations. DCP controls which consent mechanism a user is subject to. Downstream: RecordingConsentApiServer (localhost:7254) → TroubleshootingDataCaptureProfile.",
+			"item": [
+				{
+					"name": "list-dcps",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/dcp/list?company-id=9001",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "dcp", "list"],
+							"query": [
+								{"key": "company-id", "value": "9001"}
+							]
+						},
+						"description": "Lists all DCPs for a company. Returns JSON from TroubleshootingDataCaptureProfile.listDataCaptureProfiles()."
+					},
+					"response": []
+				},
+				{
+					"name": "read-default-dcp",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/dcp/read-default?company-id=9001",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "dcp", "read-default"],
+							"query": [
+								{"key": "company-id", "value": "9001"}
+							]
+						},
+						"description": "Returns the company's default DCP."
+					},
+					"response": []
+				},
+				{
+					"name": "set-dcp-to-user",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/dcp/set?company-id=9001&dcp-id={{dcpId}}&user-id=501",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "dcp", "set"],
+							"query": [
+								{"key": "company-id", "value": "9001"},
+								{"key": "dcp-id", "value": "{{dcpId}}", "description": "DCP ID from list-dcps."},
+								{"key": "user-id", "value": "501"}
+							]
+						},
+						"description": "Assigns a DCP to a user. Requires {{dcpId}} — run list-dcps first."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "consent-features",
+			"description": "Recording consent feature flag management. The only current feature is FOR_TEST. Downstream: RecordingConsentTasks (localhost:9095) → TroubleshooterRecordingConsentFeatures.",
+			"item": [
+				{
+					"name": "all-feature-states",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/consent-features/all",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "consent-features", "all"]
+						},
+						"description": "Returns enabled/disabled state for all RecordingConsentFeatureName values."
+					},
+					"response": []
+				},
+				{
+					"name": "enable-feature",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/consent-features/enable?feature=FOR_TEST",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "consent-features", "enable"],
+							"query": [
+								{"key": "feature", "value": "FOR_TEST", "description": "RecordingConsentFeatureName enum. Current values: FOR_TEST."}
+							]
+						},
+						"description": "Enables the specified feature globally."
+					},
+					"response": []
+				},
+				{
+					"name": "disable-feature",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/consent-features/disable?feature=FOR_TEST",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "consent-features", "disable"],
+							"query": [
+								{"key": "feature", "value": "FOR_TEST"}
+							]
+						},
+						"description": "Disables the specified feature globally."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "consent-settings",
+			"description": "Recording consent settings migration and cleanup. The migrate endpoint seeds appuser_consent_settings rows in the recording_consent DB. Downstream: RecordingConsentTasks (localhost:9095) → TroubleshootingConsentSettings.",
+			"item": [
+				{
+					"name": "migrate-consent-settings (all users)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/consent-settings/migrate?migrate-all=true",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "consent-settings", "migrate"],
+							"query": [
+								{"key": "migrate-all", "value": "true"},
+								{"key": "limit", "value": "100", "disabled": true, "description": "Only used when migrate-all=false."}
+							]
+						},
+						"description": "Upserts appuser_consent_settings for all eligible users. Required before the consent email interaction flow works. migrate-all=true processes every user; remove it and set limit=N to batch."
+					},
+					"response": []
+				},
+				{
+					"name": "delete-consent-settings (reset for company)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/consent-settings/delete?company-id=9001",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "consent-settings", "delete"],
+							"query": [
+								{"key": "company-id", "value": "9001"}
+							]
+						},
+						"description": "Deletes all consent settings for the company. Use to reset state before re-running migrate, or to test the 'first consent' path from scratch."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "consent-redis",
+			"description": "DCP jump-page Redis management. Downstream: RecordingConsentTasks (localhost:9095) → TroubleshootingDcpJumpPageRedis.",
+			"item": [
+				{
+					"name": "populate-company-in-redis",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/consent-redis/populate?company-id=9001&force=true",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "consent-redis", "populate"],
+							"query": [
+								{"key": "company-id", "value": "9001"},
+								{"key": "force", "value": "true", "description": "Bypass already-loaded check."}
+							]
+						},
+						"description": "Forces Redis population of DCP jump-page data for the company. Run after set-dcp and migrate-consent-settings to make the new state visible to the consent page."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "consent-email",
+			"description": "Individual consent email operations: seed Redis call details and simulate interactions. Downstream: RecordingConsentTasks (localhost:9095) → TroubleshootingConsentEmail.",
+			"item": [
+				{
+					"name": "set-call-details (seed Redis)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/consent-email/set-call-details?company-id=9001&owner-id=501",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "consent-email", "set-call-details"],
+							"query": [
+								{"key": "company-id", "value": "9001"},
+								{"key": "owner-id", "value": "501"},
+								{"key": "call-id", "value": "", "disabled": true, "description": "Leave blank to auto-generate. Supply a value to reuse a specific callId."}
+							]
+						},
+						"description": "Generates a fresh callId and seeds the Redis consent email call entry. Returns 'Done — seeded Redis call details: callId=<id>'. Prerequisite for send-interaction-event."
+					},
+					"response": []
+				},
+				{
+					"name": "get-call-details (verify Redis)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/consent-email/get-call-details?company-id=9001&call-id={{consentCallId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "consent-email", "get-call-details"],
+							"query": [
+								{"key": "company-id", "value": "9001"},
+								{"key": "call-id", "value": "{{consentCallId}}", "description": "callId from set-call-details."}
+							]
+						},
+						"description": "Reads the Redis consent email call details for a callId. Use to verify set-call-details wrote correctly."
+					},
+					"response": []
+				},
+				{
+					"name": "send-interaction-event — ACCEPTED",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/consent-email/send-interaction-event?company-id=9001&call-id={{consentCallId}}&owner-id=501&response=ACCEPTED",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "consent-email", "send-interaction-event"],
+							"query": [
+								{"key": "company-id", "value": "9001"},
+								{"key": "call-id", "value": "{{consentCallId}}"},
+								{"key": "owner-id", "value": "501"},
+								{"key": "response", "value": "ACCEPTED"}
+							]
+						},
+						"description": "Simulates invitee accepting consent. Fires the interaction event that drives the consent decision pipeline. emailId and inviteeId are auto-generated by ConsentDataFaker."
+					},
+					"response": []
+				},
+				{
+					"name": "send-interaction-event — DENIED",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/datacapture/consent-email/send-interaction-event?company-id=9001&call-id={{consentCallId}}&owner-id=501&response=DENIED",
+							"host": ["{{baseUrl}}"],
+							"path": ["datacapture", "consent-email", "send-interaction-event"],
+							"query": [
+								{"key": "company-id", "value": "9001"},
+								{"key": "call-id", "value": "{{consentCallId}}"},
+								{"key": "owner-id", "value": "501"},
+								{"key": "response", "value": "DENIED"}
+							]
+						},
+						"description": "Same as above but simulates invitee declining. Use to test the DENIED branch of the pipeline."
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "dcpId",
+			"value": "",
+			"description": "Set manually after running list-dcps (step 1 of the enable-consent flow). The DCP ID to assign to a user."
+		},
+		{
+			"key": "consentCallId",
+			"value": "",
+			"description": "Auto-populated by the simulate-consent-email folder's step 1 (set-call-details). The callId used throughout the consent email simulation."
+		}
+	]
+}

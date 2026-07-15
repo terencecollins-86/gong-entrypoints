@@ -76,13 +76,6 @@ curl -X POST 'http://localhost:8080/callschedulers/cancel-inactive-users?company
 curl -X POST 'http://localhost:8080/callschedulers/cancel-inactive-users?company-id=9001&num-of-days=30'
 ```
 
-## Trigger (hybrid)
-
-```bash
-curl -X POST 'http://localhost:8080/callschedulers/cancel-inactive-users?company-id=9001' \
-  -H 'X-CallSchedulers-Target: hybrid'
-```
-
 ## Breakpoint
 
 `TroubleshootingInactiveUsersCalls.cancelInactiveUsersCallsAndRescanOtherCalendarsForCompany()`

@@ -220,10 +220,6 @@ curl -X POST 'http://localhost:8080/callschedulers/send-calendar-event?loop=true
 curl -X POST http://localhost:8080/callschedulers/send-calendar-event/stop
 ```
 
-## Trigger (hybrid)
-
-Add `X-CallSchedulers-Target: hybrid` header to any of the above.
-
 ## Breakpoint
 
 `CallSchedulingRequestsConsumer.accept()` — entry into the scheduling pipeline after the

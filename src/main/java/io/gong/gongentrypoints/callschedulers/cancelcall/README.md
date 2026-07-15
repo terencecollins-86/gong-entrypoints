@@ -68,13 +68,6 @@ LIMIT 5;
 curl -X POST 'http://localhost:8080/callschedulers/cancel-call?call-id=<callId>&company-id=9001'
 ```
 
-## Trigger (hybrid)
-
-```bash
-curl -X POST 'http://localhost:8080/callschedulers/cancel-call?call-id=<callId>&company-id=9001' \
-  -H 'X-CallSchedulers-Target: hybrid'
-```
-
 ## Breakpoint
 
 `CancelCallService.cancelByOwnerScheduledCall()` — entry point into the cancellation logic.
